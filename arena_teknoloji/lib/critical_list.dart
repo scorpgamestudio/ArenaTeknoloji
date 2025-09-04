@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-const String API_BASE = "http://businessmanager.arenateknoloji.com";
+const String API_BASE = "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
 class CriticalListPage extends StatefulWidget {
   const CriticalListPage({super.key});

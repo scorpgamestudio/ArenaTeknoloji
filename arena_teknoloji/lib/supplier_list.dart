@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'supplier_form.dart';
 
-const String API_BASE = "http://businessmanager.arenateknoloji.com";
+const String API_BASE = "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
 class SupplierListPage extends StatefulWidget {
   const SupplierListPage({super.key});
