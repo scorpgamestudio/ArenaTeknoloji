@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'supplier_form.dart';
 
-const String API_BASE = "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
+const String API_BASE =
+    "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
 class StockFormPage extends StatefulWidget {
   final Map product;
@@ -26,10 +27,28 @@ class _StockFormPageState extends State<StockFormPage> {
   int? selectedSupplierId;
   bool loadingSuppliers = true;
 
+  // Currency
+  String currency = "TRY";
+
   @override
   void initState() {
     super.initState();
     fetchSuppliers();
+    fetchCurrency();
+  }
+
+  Future<void> fetchCurrency() async {
+    try {
+      final res = await http.get(Uri.parse("$API_BASE/settings"));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          currency = data["currency"] ?? "TRY";
+        });
+      }
+    } catch (e) {
+      debugPrint("Para birimi alınamadı: $e");
+    }
   }
 
   Future<void> fetchSuppliers() async {
@@ -127,8 +146,6 @@ class _StockFormPageState extends State<StockFormPage> {
                   );
                   if (ok == true) {
                     await fetchSuppliers();
-                    // yeni eklenen tedarikçiyi otomatik seçmek istersen:
-                    // setState(() => selectedSupplierId = int.tryParse(suppliers.first["id"].toString()));
                   }
                 },
                 icon: const Icon(Icons.add),
@@ -142,8 +159,8 @@ class _StockFormPageState extends State<StockFormPage> {
             ),
             TextField(
               controller: _priceCtrl,
-              decoration: const InputDecoration(
-                labelText: "Alış Fiyatı (birim)",
+              decoration: InputDecoration(
+                labelText: "Alış Fiyatı ($currency)", // para birimi göster
               ),
               keyboardType: TextInputType.number,
             ),

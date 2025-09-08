@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-const String API_BASE = "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
+const String API_BASE =
+    "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
 class StockListPage extends StatefulWidget {
   final Map product;
@@ -59,10 +60,11 @@ class _StockListPageState extends State<StockListPage> {
                 final price = numFmt.format(
                   double.tryParse(m["unit_price"].toString()) ?? 0,
                 );
+                final currency = m["currency"] ?? "TRY";
 
                 return ListTile(
                   title: Text(
-                    "${m["type"] == "in" ? "Giriş" : "Çıkış"} • $qty adet • $price ₺",
+                    "${m["type"] == "in" ? "Giriş" : "Çıkış"} • $qty adet • $price $currency",
                   ),
                   subtitle: Text(
                     "Tedarikçi: ${m["supplier_name"] ?? "-"} • Tarih: ${m["created_at"]}",

@@ -9,9 +9,29 @@ import 'package:arena_teknoloji/product_form.dart';
 import 'package:arena_teknoloji/supplier_list.dart';
 import 'package:arena_teknoloji/critical_list.dart';
 
-const String API_BASE = "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
+// 🔹 API adresi
+const String API_BASE =
+    "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
-void main() {
+// 🔹 Global currency
+String globalCurrency = "TRY";
+
+// 🔹 Ayarları yükle
+Future<void> loadSettings() async {
+  try {
+    final res = await http.get(Uri.parse("$API_BASE/settings"));
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      globalCurrency = data["currency"] ?? "TRY";
+    }
+  } catch (e) {
+    debugPrint("Ayarlar alınamadı: $e");
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await loadSettings(); // önce ayarları çek
   runApp(const ArenaApp());
 }
 
@@ -22,25 +42,25 @@ class ArenaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Arena Teknoloji',
+
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-  useMaterial3: true,
-  colorSchemeSeed: Colors.blue,
-  appBarTheme: const AppBarTheme(
-    elevation: 6,                    // belirgin gölge
-    shadowColor: Colors.black54,     // gölge rengi
-    backgroundColor: Color.fromARGB(255, 176, 255, 230),   // AppBar yüzeyi
-    foregroundColor: Colors.black87, // yazı/icon rengi
-    surfaceTintColor: Colors.transparent, // M3’ün mat filtresini kapat
-  ),
-),
-
-      home: const HomeShell(), // <- sabit menülü kabuk
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+        appBarTheme: const AppBarTheme(
+          elevation: 6,
+          shadowColor: Colors.black54,
+          backgroundColor: Color.fromARGB(255, 176, 255, 230),
+          foregroundColor: Colors.black87,
+          surfaceTintColor: Colors.transparent,
+        ),
+      ),
+      home: const HomeShell(),
     );
   }
 }
 
-/// Sol menüyü sabit tutan kabuk; sağda kendi Navigator'ına sahip.
+/// Sol menü sabit, sağ taraf içerik
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
   @override
@@ -59,81 +79,61 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       body: Row(
         children: [
-          // ===== Left side menu (fixed) with visible shadow =====
+          // ==== Sol Menü ====
           SizedBox(
             width: 230,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Asıl panel (Material elevation)
-                Material(
-                  elevation: 12,
-                  shadowColor: Colors.black54,
-                  child: Container(
-                    color: Colors.blue.shade50,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 20),
-                        const Center(child: ShineLogo()),
-                        const SizedBox(height: 8),
-                        const Divider(),
-                        ListTile(
-                          leading: const Icon(Icons.inventory_2),
-                          title: const Text("Ürünler"),
-                          onTap: () => _go('/products'),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.people),
-                          title: const Text("Tedarikçiler"),
-                          onTap: () => _go('/suppliers'),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.warning_amber),
-                          title: const Text("Kritik Stok"),
-                          onTap: () => _go('/critical'),
-                        ),
-                        const Spacer(),
-                        const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: Text(
-                            "© Arena Teknoloji",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.black54, fontSize: 12),
-                          ),
-                        ),
-                      ],
+            child: Material(
+              elevation: 12,
+              shadowColor: Colors.black54,
+              child: Container(
+                color: Colors.blue.shade50,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 20),
+                    const Center(child: ShineLogo()),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.inventory_2),
+                      title: const Text("Ürünler"),
+                      onTap: () => _go('/products'),
                     ),
-                  ),
-                ),
-
-                // Sağ kenarda belirgin “ayraç” gölgesi (gradient şerit)
-                Positioned(
-                  right: -1,
-                  top: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 5,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          Colors.black.withOpacity(0.18),
-                          Colors.black.withOpacity(0.10),
-                          Colors.black.withOpacity(0.04),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.35, 0.7, 1.0],
+                    ListTile(
+                      leading: const Icon(Icons.people),
+                      title: const Text("Tedarikçiler"),
+                      onTap: () => _go('/suppliers'),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.warning_amber),
+                      title: const Text("Kritik Stok"),
+                      onTap: () => _go('/critical'),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.bar_chart),
+                      title: const Text("Raporlama"),
+                      onTap: () => _go('/reports'),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.settings),
+                      title: const Text("Ayarlar"),
+                      onTap: () => _go('/settings'),
+                    ),
+                    const Spacer(),
+                    const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: Text(
+                        "© Arena Teknoloji",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black54, fontSize: 12),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
 
-          // ===== Right side content (its own Navigator) =====
+          // ==== Sağ içerik ====
           Expanded(
             child: Navigator(
               key: _contentNavKey,
@@ -141,18 +141,35 @@ class _HomeShellState extends State<HomeShell> {
               onGenerateRoute: (settings) {
                 switch (settings.name) {
                   case '/products':
-                    return MaterialPageRoute(builder: (_) => const ProductsPage());
+                    return MaterialPageRoute(
+                      builder: (_) => const ProductsPage(),
+                    );
                   case '/suppliers':
-                    return MaterialPageRoute(builder: (_) => const SupplierListPage());
+                    return MaterialPageRoute(
+                      builder: (_) => const SupplierListPage(),
+                    );
                   case '/critical':
-                    return MaterialPageRoute(builder: (_) => const CriticalListPage());
-                  // Detay ve form rotaları (içeride push ile kullanılır)
+                    return MaterialPageRoute(
+                      builder: (_) => const CriticalListPage(),
+                    );
+                  case '/reports':
+                    return MaterialPageRoute(
+                      builder: (_) => const ReportsPage(),
+                    );
+                  case '/settings':
+                    return MaterialPageRoute(
+                      builder: (_) => const SettingsPage(),
+                    );
+                  // Detay ve form rotaları
                   case '/productForm':
-                    return MaterialPageRoute(builder: (_) => const ProductFormPage());
+                    return MaterialPageRoute(
+                      builder: (_) => const ProductFormPage(),
+                    );
                   case '/productDetail':
                     final Map product = settings.arguments as Map;
                     return MaterialPageRoute(
-                        builder: (_) => ProductDetailPage(product: product));
+                      builder: (_) => ProductDetailPage(product: product),
+                    );
                   default:
                     return MaterialPageRoute(
                       builder: (_) => const Scaffold(
@@ -169,7 +186,7 @@ class _HomeShellState extends State<HomeShell> {
   }
 }
 
-/// Sağ içerikte görünen Ürünler sayfası
+/// Ürünler Sayfası
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
   @override
@@ -178,21 +195,32 @@ class ProductsPage extends StatefulWidget {
 
 class _ProductsPageState extends State<ProductsPage> {
   List products = [];
+  List filteredProducts = [];
   bool loading = true;
   final numFmt = NumberFormat("#,##0.##", "tr_TR");
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     fetchProducts();
+    _searchCtrl.addListener(_filterProducts);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> fetchProducts() async {
     setState(() => loading = true);
     final res = await http.get(Uri.parse("$API_BASE/products"));
     if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
       setState(() {
-        products = jsonDecode(res.body);
+        products = data;
+        filteredProducts = data;
         loading = false;
       });
     } else {
@@ -200,35 +228,99 @@ class _ProductsPageState extends State<ProductsPage> {
     }
   }
 
+  void _filterProducts() {
+    final query = _searchCtrl.text.toLowerCase();
+    setState(() {
+      filteredProducts = products.where((p) {
+        final name = (p["name"] ?? "").toString().toLowerCase();
+        final barcode = (p["barcode"] ?? "").toString().toLowerCase();
+        return name.contains(query) || barcode.contains(query);
+      }).toList();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 255, 255, 255), // kontrast için beyaz
-      appBar: AppBar(title: const Text("Ürünler")),
+      appBar: AppBar(
+        title: const Text("Ürünler"),
+        automaticallyImplyLeading: false, // geri oku kaldır
+      ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                final p = products[index];
-                return ListTile(
-                  title: Text(p["name"] ?? ""),
-                  subtitle: Text(
-                    "Stok: ${numFmt.format(double.tryParse(p["stock_on_hand"].toString()) ?? 0)}"
-                    " | Satış: ${numFmt.format(double.tryParse(p["sale_price"].toString()) ?? 0)} ₺"
-                    " | Maliyet: ${numFmt.format(double.tryParse(p["avg_cost"].toString()) ?? 0)} ₺",
+          : Column(
+              children: [
+                // 🔹 Arama kutusu
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: "Ürün ara (isim veya barkod)...",
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                  onTap: () async {
-                    final result = await Navigator.of(context).pushNamed(
-                      '/productDetail',
-                      arguments: p,
-                    );
-                    if (result == true) {
-                      fetchProducts();
-                    }
-                  },
-                );
-              },
+                ),
+
+                // 🔹 Tablo görünümü
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: DataTable(
+                      columns: const [
+                        DataColumn(label: Text("Ürün Adı")),
+                        DataColumn(label: Text("Stok")),
+                        DataColumn(label: Text("Satış Fiyatı")),
+                        DataColumn(label: Text("Maliyet")),
+                      ],
+                      rows: filteredProducts.map((p) {
+                        final compats = (p["compatibles"] ?? []) as List;
+                        final compatsText = compats.isEmpty
+                            ? "Uyumlu model yok"
+                            : compats.map((c) => c["name"]).join(", ");
+
+                        return DataRow(
+                          cells: [
+                            DataCell(
+                              Tooltip(
+                                message: compatsText, // hover’da görünecek
+                                child: Text(p["name"] ?? ""),
+                              ),
+                              onTap: () async {
+                                final result = await Navigator.of(
+                                  context,
+                                ).pushNamed('/productDetail', arguments: p);
+                                if (result == true) fetchProducts();
+                              },
+                            ),
+                            DataCell(
+                              Text(
+                                numFmt.format(
+                                  double.tryParse(
+                                        p["stock_on_hand"].toString(),
+                                      ) ??
+                                      0,
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                "${numFmt.format(double.tryParse(p["sale_price"].toString()) ?? 0)} $globalCurrency",
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                "${numFmt.format(double.tryParse(p["avg_cost"].toString()) ?? 0)} $globalCurrency",
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
             ),
       floatingActionButton: FloatingActionButton(
         child: const Icon(Icons.add),
@@ -241,10 +333,108 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 }
 
-/// Logoya shine + drop shadow efekti
+/// Raporlama Sayfası
+class ReportsPage extends StatefulWidget {
+  const ReportsPage({super.key});
+  @override
+  State<ReportsPage> createState() => _ReportsPageState();
+}
+
+class _ReportsPageState extends State<ReportsPage> {
+  double totalValue = 0;
+  String currency = globalCurrency;
+  final numFmt = NumberFormat("#,##0.##", "tr_TR");
+
+  @override
+  void initState() {
+    super.initState();
+    fetchReport();
+  }
+
+  Future<void> fetchReport() async {
+    final res = await http.get(Uri.parse("$API_BASE/report/stock_value"));
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+      setState(() {
+        totalValue = (data["total_value"] ?? 0).toDouble();
+        currency = data["currency"] ?? globalCurrency;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Raporlama")),
+      body: Center(
+        child: Text(
+          "Toplam Sermaye: ${numFmt.format(totalValue)} $currency",
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
+    );
+  }
+}
+
+/// Ayarlar Sayfası
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  String selectedCurrency = globalCurrency;
+  final currencies = ["TRY", "USD", "EUR"];
+
+  Future<void> saveSettings() async {
+    final body = {"currency": selectedCurrency};
+    final res = await http.post(
+      Uri.parse("$API_BASE/settings"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(body),
+    );
+    if (res.statusCode == 200) {
+      globalCurrency = selectedCurrency;
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Ayarlar kaydedildi")));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Ayarlar")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            DropdownButtonFormField<String>(
+              value: selectedCurrency,
+              decoration: const InputDecoration(labelText: "Para Birimi"),
+              items: currencies
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (val) => setState(() => selectedCurrency = val!),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: saveSettings,
+              child: const Text("Kaydet"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Logoya shine + shadow efekti
 class ShineLogo extends StatefulWidget {
   const ShineLogo({super.key});
-
   @override
   State<ShineLogo> createState() => _ShineLogoState();
 }
@@ -269,14 +459,13 @@ class _ShineLogoState extends State<ShineLogo>
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 38, // logonun boyu
-      width: 210, // logonun genişliği kadar (uygunsa artır/azalt)
+      height: 38,
+      width: 210,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Drop shadow
             PhysicalModel(
               color: const Color.fromARGB(48, 2, 154, 255),
               elevation: 35,
@@ -288,8 +477,6 @@ class _ShineLogoState extends State<ShineLogo>
                 fit: BoxFit.contain,
               ),
             ),
-
-            // Shine çizgisi (taşma olursa ClipRRect kesiyor)
             AnimatedBuilder(
               animation: _c,
               builder: (context, _) {
@@ -320,4 +507,3 @@ class _ShineLogoState extends State<ShineLogo>
     );
   }
 }
-
