@@ -63,18 +63,19 @@ class _DefinitionsPageState extends State<DefinitionsPage>
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int?>(
-  decoration: const InputDecoration(labelText: "Üst Kategori"),
-  value: null,
-  items: [
-    const DropdownMenuItem<int?>(value: null, child: Text("Yok")),
-    ...categories.map((c) => DropdownMenuItem<int?>(
-          value: int.tryParse(c["id"].toString()), // ✅ String → int
-          child: Text(c["name"]),
-        )),
-  ],
-  onChanged: (val) => parentId = val,
-),
-
+                decoration: const InputDecoration(labelText: "Üst Kategori"),
+                value: null,
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text("Yok")),
+                  ...categories.map(
+                    (c) => DropdownMenuItem<int?>(
+                      value: int.tryParse(c["id"].toString()), // ✅ String → int
+                      child: Text(c["name"]),
+                    ),
+                  ),
+                ],
+                onChanged: (val) => parentId = val,
+              ),
             ],
           ),
           actions: [
@@ -86,7 +87,7 @@ class _DefinitionsPageState extends State<DefinitionsPage>
               onPressed: () {
                 Navigator.pop(context, {
                   "name": nameController.text.trim(),
-                  "parent_id": parentId
+                  "parent_id": parentId,
                 });
               },
               child: const Text("Kaydet"),
@@ -125,7 +126,8 @@ class _DefinitionsPageState extends State<DefinitionsPage>
               child: const Text("İptal"),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, nameController.text.trim()),
+              onPressed: () =>
+                  Navigator.pop(context, nameController.text.trim()),
               child: const Text("Kaydet"),
             ),
           ],
@@ -161,17 +163,18 @@ class _DefinitionsPageState extends State<DefinitionsPage>
                 decoration: const InputDecoration(labelText: "Model Adı"),
               ),
               const SizedBox(height: 12),
-             DropdownButtonFormField<int?>(
-  decoration: const InputDecoration(labelText: "Marka Seç"),
-  items: brands
-      .map((b) => DropdownMenuItem<int?>(
-            value: int.tryParse(b["id"].toString()), // ✅
-            child: Text(b["name"]),
-          ))
-      .toList(),
-  onChanged: (val) => brandId = val,
-),
-
+              DropdownButtonFormField<int?>(
+                decoration: const InputDecoration(labelText: "Marka Seç"),
+                items: brands
+                    .map(
+                      (b) => DropdownMenuItem<int?>(
+                        value: int.tryParse(b["id"].toString()), // ✅
+                        child: Text(b["name"]),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (val) => brandId = val,
+              ),
             ],
           ),
           actions: [
@@ -183,7 +186,7 @@ class _DefinitionsPageState extends State<DefinitionsPage>
               onPressed: () {
                 Navigator.pop(context, {
                   "name": nameController.text.trim(),
-                  "brand_id": brandId
+                  "brand_id": brandId,
                 });
               },
               child: const Text("Kaydet"),
@@ -205,60 +208,57 @@ class _DefinitionsPageState extends State<DefinitionsPage>
     }
   }
 
-Future<void> deleteItem(String type, dynamic rawId, String name) async {
-  final id = int.tryParse(rawId.toString());
-  if (id == null) return;
+  Future<void> deleteItem(String type, dynamic rawId, String name) async {
+    final id = int.tryParse(rawId.toString());
+    if (id == null) return;
 
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text("Silme Onayı"),
-      content: Text(
-        "“$name” kaydını silmek üzeresiniz.\n\n"
-        "Bu $type kaydına bağlı alt kayıtlar (alt kategoriler, ürünler vb.) olabilir.\n"
-        "Silmek istediğinize emin misiniz?",
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Silme Onayı"),
+        content: Text(
+          "“$name” kaydını silmek üzeresiniz.\n\n"
+          "Bu $type kaydına bağlı alt kayıtlar (alt kategoriler, ürünler vb.) olabilir.\n"
+          "Silmek istediğinize emin misiniz?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("İptal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Evet, Sil"),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text("İptal"),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text("Evet, Sil"),
-        ),
-      ],
-    ),
-  );
-
-  if (confirm != true) return; // Vazgeçti
-
-  try {
-    final url = Uri.parse("$API_BASE/$type/$id");
-    final res = await http.delete(url);
-
-    if (!mounted) return;
-    if (res.statusCode == 200) {
-      await fetchAll();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("$name silindi")),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Silinemedi (${res.statusCode})")),
-      );
-    }
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Silme hatası: $e")),
     );
+
+    if (confirm != true) return; // Vazgeçti
+
+    try {
+      final url = Uri.parse("$API_BASE/$type/$id");
+      final res = await http.delete(url);
+
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        await fetchAll();
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("$name silindi")));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Silinemedi (${res.statusCode})")),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Silme hatası: $e")));
+    }
   }
-}
-
-
-
 
   Widget buildCategoryList() {
     return Column(
@@ -270,22 +270,25 @@ Future<void> deleteItem(String type, dynamic rawId, String name) async {
                   itemCount: categories.length,
                   itemBuilder: (context, i) {
                     final c = categories[i];
-                   final parent = categories.firstWhere(
-  (p) => p["id"].toString() == (c["parent_id"] ?? '').toString(),
-  orElse: () => null,
-);
+                    final parent = categories.firstWhere(
+                      (p) =>
+                          p["id"].toString() ==
+                          (c["parent_id"] ?? '').toString(),
+                      orElse: () => null,
+                    );
 
                     return ListTile(
                       title: Text(c["name"]),
-                      subtitle: parent != null ? Text("Üst: ${parent["name"]}") : null,
+                      subtitle: parent != null
+                          ? Text("Üst: ${parent["name"]}")
+                          : null,
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                     onPressed: () {
-  final id = int.tryParse(c["id"].toString());
-  if (id != null) deleteItem("categories", id, c["name"]);
-},
-
-
+                        onPressed: () {
+                          final id = int.tryParse(c["id"].toString());
+                          if (id != null)
+                            deleteItem("categories", id, c["name"]);
+                        },
                       ),
                     );
                   },
@@ -314,12 +317,10 @@ Future<void> deleteItem(String type, dynamic rawId, String name) async {
                       title: Text(b["name"]),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                     onPressed: () {
-  final id = int.tryParse(b["id"].toString());
-  if (id != null) deleteItem("brands", id, b["name"]);
-},
-
-
+                        onPressed: () {
+                          final id = int.tryParse(b["id"].toString());
+                          if (id != null) deleteItem("brands", id, b["name"]);
+                        },
                       ),
                     );
                   },
@@ -349,12 +350,10 @@ Future<void> deleteItem(String type, dynamic rawId, String name) async {
                       subtitle: Text("Marka: ${m["brand_name"] ?? '-'}"),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-  final id = int.tryParse(m["id"].toString());
-  if (id != null) deleteItem("models", id, m["name"]);
-},
-
-
+                        onPressed: () {
+                          final id = int.tryParse(m["id"].toString());
+                          if (id != null) deleteItem("models", id, m["name"]);
+                        },
                       ),
                     );
                   },
@@ -374,22 +373,32 @@ Future<void> deleteItem(String type, dynamic rawId, String name) async {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Tanımlar"),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: "Kategoriler"),
-            Tab(text: "Markalar"),
-            Tab(text: "Modeller"),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            color: const Color.fromARGB(
+              255,
+              239,
+              255,
+              231,
+            ), // 👈 TabBar zemini buradan kontrol ediliyor
+            child: TabBar(
+              controller: _tabController,
+              labelColor: Colors.blue, // aktif sekme yazısı
+              unselectedLabelColor: Colors.black54, // pasif sekme yazısı
+              indicatorColor: Colors.blue, // alt çizgi
+              tabs: const [
+                Tab(text: "Kategoriler"),
+                Tab(text: "Markalar"),
+                Tab(text: "Modeller"),
+              ],
+            ),
+          ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          buildCategoryList(),
-          buildBrandList(),
-          buildModelList(),
-        ],
+        children: [buildCategoryList(), buildBrandList(), buildModelList()],
       ),
     );
   }

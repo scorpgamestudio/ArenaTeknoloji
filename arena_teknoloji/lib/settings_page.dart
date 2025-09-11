@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
-const String API_BASE =
-    "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
+import 'config.dart' as cfg;
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -13,44 +11,31 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String? _currency;
-  final List<String> currencies = ["TRY", "USD", "EUR"];
-  bool loading = true;
+  String selectedCurrency = cfg.globalCurrency;
+  final currencies = ["TRY", "USD", "EUR"];
+  bool loading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchSettings();
-  }
-
-  Future<void> _fetchSettings() async {
-    final res = await http.get(Uri.parse("$API_BASE/settings"));
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      setState(() {
-        _currency = data["currency"] ?? "TRY";
-        loading = false;
-      });
-    } else {
-      setState(() => loading = false);
-    }
-  }
-
-  Future<void> _saveCurrency(String value) async {
+  Future<void> _saveCurrency() async {
     setState(() => loading = true);
-    final res = await http.put(
-      Uri.parse("$API_BASE/settings"),
+
+    final res = await http.post(
+      Uri.parse("${cfg.API_BASE}/settings"),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"key": "currency", "value": value}),
+      body: jsonEncode({"currency": selectedCurrency}),
     );
+
     setState(() => loading = false);
 
     if (res.statusCode == 200) {
-      setState(() => _currency = value);
+      cfg.globalCurrency = selectedCurrency; // 🔹 global değişken güncellensin
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Para birimi $value olarak kaydedildi")),
+        SnackBar(
+          content: Text("Para birimi $selectedCurrency olarak kaydedildi"),
+        ),
       );
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("Hata: ${res.statusCode}")));
@@ -61,30 +46,37 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("⚙️ Ayarlar")),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Genel Para Birimi",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButton<String>(
-                    value: _currency,
-                    items: currencies
-                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) _saveCurrency(val);
-                    },
-                  ),
-                ],
-              ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Genel Para Birimi",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 8),
+            DropdownButton<String>(
+              value: selectedCurrency,
+              items: currencies
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => selectedCurrency = val);
+                }
+              },
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: loading ? null : _saveCurrency,
+              child: loading
+                  ? const CircularProgressIndicator()
+                  : const Text("Kaydet"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

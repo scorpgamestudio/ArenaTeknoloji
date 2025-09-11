@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:dropdown_search/dropdown_search.dart';
-import 'package:collection/collection.dart';
 
 const String API_BASE =
     "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
@@ -43,13 +41,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
   final _saleCtrl = TextEditingController();
   final _criticalCtrl = TextEditingController();
   final _versionCtrl = TextEditingController();
-  final _compatSearchCtrl = TextEditingController();
 
   final Set<String> _selectedColors = {};
-  final Set<Map<String, dynamic>> _selectedCompatibles = {};
-
-  List allProducts = [];
-  List searchResults = [];
   List categories = [];
   List brands = [];
   List models = [];
@@ -62,9 +55,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
   @override
   void initState() {
     super.initState();
-    _fetchProducts();
     _fetchDefinitions();
-    _compatSearchCtrl.addListener(_onSearchChanged);
   }
 
   Future<void> _fetchDefinitions() async {
@@ -92,37 +83,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     _saleCtrl.dispose();
     _criticalCtrl.dispose();
     _versionCtrl.dispose();
-    _compatSearchCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _fetchProducts() async {
-    try {
-      final res = await http.get(Uri.parse("$API_BASE/products"));
-      if (res.statusCode == 200) {
-        setState(() {
-          allProducts = jsonDecode(res.body);
-        });
-      }
-    } catch (e) {
-      debugPrint("Ürün listesi alınamadı: $e");
-    }
-  }
-
-  void _onSearchChanged() {
-    final query = _compatSearchCtrl.text.toLowerCase();
-    if (query.isEmpty) {
-      setState(() => searchResults = []);
-      return;
-    }
-    setState(() {
-      searchResults = allProducts
-          .where((p) => (p["name"] ?? "")
-              .toString()
-              .toLowerCase()
-              .contains(query))
-          .toList();
-    });
   }
 
   // 🔹 Boşsa otomatik barkod (EAN-13)
@@ -159,8 +120,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       "name": _nameCtrl.text.trim(),
       "purchase_price":
           double.tryParse(_purchaseCtrl.text.replaceAll(",", ".")) ?? 0,
-      "sale_price":
-          double.tryParse(_saleCtrl.text.replaceAll(",", ".")) ?? 0,
+      "sale_price": double.tryParse(_saleCtrl.text.replaceAll(",", ".")) ?? 0,
       "critical_stock":
           double.tryParse(_criticalCtrl.text.replaceAll(",", ".")) ?? 0,
       "unit": "adet",
@@ -181,21 +141,6 @@ class _ProductFormPageState extends State<ProductFormPage> {
       );
 
       if (res.statusCode == 201) {
-        final productId = jsonDecode(res.body)["id"];
-
-        // 🔹 Uyumlu modelleri kaydet
-        if (_selectedCompatibles.isNotEmpty) {
-          final ids = _selectedCompatibles
-              .map((p) => int.tryParse(p["id"].toString()) ?? 0)
-              .where((id) => id > 0)
-              .toList();
-
-          await http.post(
-            Uri.parse("$API_BASE/products/$productId/compatibles"),
-            headers: {"Content-Type": "application/json"},
-            body: jsonEncode({"compatibles": ids}),
-          );
-        }
         if (mounted) Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -204,270 +149,399 @@ class _ProductFormPageState extends State<ProductFormPage> {
       }
     } catch (e) {
       debugPrint("❌ Exception: $e");
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("İstek başarısız: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("İstek başarısız: $e")));
     } finally {
       setState(() => loading = false);
     }
   }
 
-  @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(title: const Text("Yeni Ürün")),
-    body: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Form(
-        key: _formKey,
-        child: ListView(
+  // ====== POPUP: Kategori Ekle (üst kategori seçilebilir) ======
+  Future<void> _openAddCategoryDialog() async {
+    final nameCtrl = TextEditingController();
+    int? parentId;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Kategori Ekle"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
-              controller: _skuCtrl,
-              decoration: const InputDecoration(labelText: "SKU (opsiyonel)"),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: "Kategori Adı"),
             ),
-
-            // 🔹 Kategori Autocomplete
-         // 🔹 Kategori Autocomplete
-Autocomplete<Map<String, dynamic>>(
-  displayStringForOption: (opt) => opt["name"] ?? "",
-  optionsBuilder: (TextEditingValue text) {
-    if (text.text.isEmpty) {
-      return categories.cast<Map<String, dynamic>>();
-    }
-    return categories
-        .where((c) =>
-            (c["name"] ?? "").toLowerCase().contains(text.text.toLowerCase()))
-        .cast<Map<String, dynamic>>(); // ✅ tip dönüştürme
-  },
-  onSelected: (val) {
-    setState(() {
-      selectedCategoryId = int.tryParse(val["id"].toString());
-    });
-  },
-  fieldViewBuilder: (ctx, controller, node, onComplete) {
-    return TextFormField(
-      controller: controller,
-      focusNode: node,
-      decoration: const InputDecoration(
-        labelText: "Kategori",
-        border: OutlineInputBorder(),
-      ),
-      validator: (_) =>
-          selectedCategoryId == null ? "Kategori seçmek zorunlu" : null,
-    );
-  },
-),
-
             const SizedBox(height: 12),
-
-            // 🔹 Marka Autocomplete
-            // 🔹 Marka Autocomplete
-Autocomplete<Map<String, dynamic>>(
-  displayStringForOption: (opt) => opt["name"] ?? "",
-  optionsBuilder: (TextEditingValue text) {
-    if (text.text.isEmpty) {
-      return brands.cast<Map<String, dynamic>>();
-    }
-    return brands
-        .where((b) =>
-            (b["name"] ?? "").toLowerCase().contains(text.text.toLowerCase()))
-        .cast<Map<String, dynamic>>();
-  },
-  onSelected: (val) {
-    setState(() {
-      selectedBrandId = int.tryParse(val["id"].toString());
-    });
-  },
-  fieldViewBuilder: (ctx, controller, node, onComplete) {
-    return TextFormField(
-      controller: controller,
-      focusNode: node,
-      decoration: const InputDecoration(
-        labelText: "Marka",
-        border: OutlineInputBorder(),
-      ),
-      validator: (_) =>
-          selectedBrandId == null ? "Marka seçmek zorunlu" : null,
-    );
-  },
-),
-
-            const SizedBox(height: 12),
-
-            // 🔹 Model Autocomplete
-           // 🔹 Model Autocomplete
-Autocomplete<Map<String, dynamic>>(
-  displayStringForOption: (opt) =>
-      "${opt["name"] ?? ""} (${opt["brand_name"] ?? ""})",
-  optionsBuilder: (TextEditingValue text) {
-    if (text.text.isEmpty) {
-      return models.cast<Map<String, dynamic>>();
-    }
-    return models
-        .where((m) =>
-            (m["name"] ?? "").toLowerCase().contains(text.text.toLowerCase()))
-        .cast<Map<String, dynamic>>();
-  },
-  onSelected: (val) {
-    setState(() {
-      selectedModelId = int.tryParse(val["id"].toString());
-    });
-  },
-  fieldViewBuilder: (ctx, controller, node, onComplete) {
-    return TextFormField(
-      controller: controller,
-      focusNode: node,
-      decoration: const InputDecoration(
-        labelText: "Model",
-        border: OutlineInputBorder(),
-      ),
-      validator: (_) =>
-          selectedModelId == null ? "Model seçmek zorunlu" : null,
-    );
-  },
-),
-
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: "Ürün Adı"),
-              validator: (v) => v == null || v.isEmpty ? "Zorunlu" : null,
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _barcodeCtrl,
-                    decoration: const InputDecoration(
-                      labelText: "Barkod (boşsa otomatik)",
-                    ),
+            DropdownButtonFormField<int?>(
+              decoration: const InputDecoration(
+                labelText: "Üst Kategori (opsiyonel)",
+                border: OutlineInputBorder(),
+              ),
+              value: parentId,
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text("Yok")),
+                ...categories.map<DropdownMenuItem<int?>>(
+                  (c) => DropdownMenuItem<int?>(
+                    value: int.tryParse(c["id"].toString()),
+                    child: Text(c["name"]),
                   ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    _barcodeCtrl.text = _genEAN13();
-                    setState(() {});
-                  },
-                  child: const Text("Oluştur"),
                 ),
               ],
+              onChanged: (v) => parentId = v,
             ),
-            TextFormField(
-              controller: _versionCtrl,
-              decoration:
-                  const InputDecoration(labelText: "Versiyon Kodu (opsiyonel)"),
-            ),
-            TextFormField(
-              controller: _purchaseCtrl,
-              decoration: const InputDecoration(labelText: "Alış Fiyatı"),
-              keyboardType: TextInputType.number,
-            ),
-            TextFormField(
-              controller: _saleCtrl,
-              decoration: const InputDecoration(labelText: "Satış Fiyatı"),
-              keyboardType: TextInputType.number,
-            ),
-            TextFormField(
-              controller: _criticalCtrl,
-              decoration: const InputDecoration(labelText: "Kritik Stok"),
-              keyboardType: TextInputType.number,
-            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("İptal"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final res = await http.post(
+                Uri.parse("$API_BASE/categories"),
+                headers: {"Content-Type": "application/json"},
+                body: jsonEncode({
+                  "name": name,
+                  if (parentId != null) "parent_id": parentId,
+                }),
+              );
+              if (res.statusCode == 200 || res.statusCode == 201) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text("Kaydet"),
+          ),
+        ],
+      ),
+    );
 
-            const SizedBox(height: 16),
-            Text("Renkler", style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: -6,
-              children: predefinedColors.map((color) {
-                final checked = _selectedColors.contains(color);
-                return FilterChip(
-                  label: Text(color),
-                  selected: checked,
-                  onSelected: (val) {
-                    setState(() {
-                      if (val) {
-                        _selectedColors.add(color);
-                      } else {
-                        _selectedColors.remove(color);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
-            ),
+    if (ok == true) _fetchDefinitions();
+  }
 
-            const SizedBox(height: 20),
-            Text("Uyumlu Modeller",
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
+  // ====== POPUP: Marka Ekle (bağımsız) ======
+  Future<void> _openAddBrandDialog() async {
+    final nameCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Marka Ekle"),
+        content: TextField(
+          controller: nameCtrl,
+          decoration: const InputDecoration(labelText: "Marka Adı"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("İptal"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final res = await http.post(
+                Uri.parse("$API_BASE/brands"),
+                headers: {"Content-Type": "application/json"},
+                body: jsonEncode({"name": name}),
+              );
+              if (res.statusCode == 200 || res.statusCode == 201) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: const Text("Kaydet"),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) _fetchDefinitions();
+  }
+
+  // ====== POPUP: Model Ekle (markaya bağlı + üst model seçilebilir) ======
+  Future<void> _openAddModelDialog() async {
+    if (selectedBrandId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Önce bir marka seçmelisiniz")),
+      );
+      return;
+    }
+
+    final nameCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Model Ekle"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Seçili Marka: ${brands.firstWhere((b) => b["id"].toString() == selectedBrandId.toString(), orElse: () => {"name": "-"})["name"]}",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
             TextField(
-              controller: _compatSearchCtrl,
-              decoration: const InputDecoration(
-                labelText: "Ürün ara...",
-                prefixIcon: Icon(Icons.search),
-              ),
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: "Model Adı"),
             ),
-            const SizedBox(height: 8),
-            if (searchResults.isNotEmpty)
-              ...searchResults.take(5).map((p) {
-                final id = int.tryParse(p["id"].toString()) ?? 0;
-                return ListTile(
-                  title: Text(p["name"] ?? ""),
-                  trailing: IconButton(
-                    icon: Icon(
-                      _selectedCompatibles.any((x) => x["id"] == id)
-                          ? Icons.check_box
-                          : Icons.add_box_outlined,
-                      color: Colors.blue,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        if (_selectedCompatibles.any((x) => x["id"] == id)) {
-                          _selectedCompatibles.removeWhere((x) => x["id"] == id);
-                        } else {
-                          _selectedCompatibles.add(p);
-                        }
-                      });
-                    },
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("İptal"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final res = await http.post(
+                Uri.parse("$API_BASE/models"),
+                headers: {"Content-Type": "application/json"},
+                body: jsonEncode({"name": name, "brand_id": selectedBrandId}),
+              );
+              if (res.statusCode == 200 || res.statusCode == 201) {
+                Navigator.pop(ctx, true);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("Model eklenemedi (${res.statusCode})"),
                   ),
                 );
-              }),
+              }
+            },
+            child: const Text("Kaydet"),
+          ),
+        ],
+      ),
+    );
 
-            if (_selectedCompatibles.isNotEmpty) ...[
-              const Divider(),
-              Text("Seçilen Modeller",
-                  style: Theme.of(context).textTheme.titleSmall),
+    if (ok == true) {
+      await _fetchDefinitions();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredModels = selectedBrandId == null
+        ? <dynamic>[]
+        : models.where(
+            (m) => m["brand_id"].toString() == selectedBrandId.toString(),
+          );
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Yeni Ürün")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              TextFormField(
+                controller: _skuCtrl,
+                decoration: const InputDecoration(labelText: "SKU (opsiyonel)"),
+              ),
+              const SizedBox(height: 12),
+
+              // 🔹 Kategori - Marka - Model YAN YANA
+              Row(
+                children: [
+                  // Kategori
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DropdownButtonFormField<int>(
+                          decoration: const InputDecoration(
+                            labelText: "Kategori",
+                            border: OutlineInputBorder(),
+                          ),
+                          value: selectedCategoryId,
+                          hint: const Text("Kategori seç"),
+                          items: categories
+                              .map(
+                                (c) => DropdownMenuItem<int>(
+                                  value: int.tryParse(c["id"].toString()),
+                                  child: Text(c["name"]),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              selectedCategoryId = val;
+                            });
+                          },
+                        ),
+                        TextButton(
+                          onPressed: _openAddCategoryDialog,
+                          child: const Text("+ Kategori Ekle"),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Marka
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DropdownButtonFormField<int>(
+                          decoration: const InputDecoration(
+                            labelText: "Marka",
+                            border: OutlineInputBorder(),
+                          ),
+                          value: selectedBrandId,
+                          hint: const Text("Marka seç"),
+                          items: brands
+                              .map(
+                                (b) => DropdownMenuItem<int>(
+                                  value: int.tryParse(b["id"].toString()),
+                                  child: Text(b["name"]),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              selectedBrandId = val;
+                              selectedModelId = null;
+                            });
+                          },
+                        ),
+                        TextButton(
+                          onPressed: _openAddBrandDialog,
+                          child: const Text("+ Marka Ekle"),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Model
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DropdownButtonFormField<int>(
+                          decoration: const InputDecoration(
+                            labelText: "Model",
+                            border: OutlineInputBorder(),
+                          ),
+                          value: selectedModelId,
+                          hint: const Text("Model seç"),
+                          items: filteredModels
+                              .map(
+                                (m) => DropdownMenuItem<int>(
+                                  value: int.tryParse(m["id"].toString()),
+                                  child: Text(m["name"]),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            setState(() => selectedModelId = val);
+                          },
+                        ),
+                        TextButton(
+                          onPressed: selectedBrandId == null
+                              ? null
+                              : _openAddModelDialog,
+                          child: const Text("+ Model Ekle"),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              TextFormField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(labelText: "Ürün Adı"),
+                validator: (v) => v == null || v.isEmpty ? "Zorunlu" : null,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _barcodeCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Barkod (boşsa otomatik)",
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      _barcodeCtrl.text = _genEAN13();
+                      setState(() {});
+                    },
+                    child: const Text("Oluştur"),
+                  ),
+                ],
+              ),
+              TextFormField(
+                controller: _versionCtrl,
+                decoration: const InputDecoration(
+                  labelText: "Versiyon Kodu (opsiyonel)",
+                ),
+              ),
+              TextFormField(
+                controller: _purchaseCtrl,
+                decoration: const InputDecoration(labelText: "Alış Fiyatı"),
+                keyboardType: TextInputType.number,
+              ),
+              TextFormField(
+                controller: _saleCtrl,
+                decoration: const InputDecoration(labelText: "Satış Fiyatı"),
+                keyboardType: TextInputType.number,
+              ),
+              TextFormField(
+                controller: _criticalCtrl,
+                decoration: const InputDecoration(labelText: "Kritik Stok"),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+
+              Text("Renkler", style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
-                children: _selectedCompatibles.map((p) {
-                  return Chip(
-                    label: Text(p["name"] ?? ""),
-                    onDeleted: () {
+                runSpacing: -6,
+                children: predefinedColors.map((color) {
+                  final checked = _selectedColors.contains(color);
+                  return FilterChip(
+                    label: Text(color),
+                    selected: checked,
+                    onSelected: (val) {
                       setState(() {
-                        _selectedCompatibles
-                            .removeWhere((x) => x["id"] == p["id"]);
+                        if (val) {
+                          _selectedColors.add(color);
+                        } else {
+                          _selectedColors.remove(color);
+                        }
                       });
                     },
                   );
                 }).toList(),
               ),
-            ],
 
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: loading ? null : _save,
-              child: loading
-                  ? const CircularProgressIndicator()
-                  : const Text("Kaydet"),
-            ),
-          ],
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: loading ? null : _save,
+                child: loading
+                    ? const CircularProgressIndicator()
+                    : const Text("Kaydet"),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 }

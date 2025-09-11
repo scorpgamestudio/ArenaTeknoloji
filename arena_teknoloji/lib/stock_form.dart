@@ -129,11 +129,11 @@ class _StockFormPageState extends State<StockFormPage> {
               items: const [
                 DropdownMenuItem(value: "in", child: Text("Stok Giriş")),
                 DropdownMenuItem(value: "out", child: Text("Stok Çıkış")),
-                DropdownMenuItem(value: "adjust", child: Text("Düzeltme")),
               ],
               onChanged: (v) => setState(() => movementType = v!),
               decoration: const InputDecoration(labelText: "Hareket Türü"),
             ),
+
             const SizedBox(height: 8),
             supplierDropdown,
             Align(
@@ -160,10 +160,13 @@ class _StockFormPageState extends State<StockFormPage> {
             TextField(
               controller: _priceCtrl,
               decoration: InputDecoration(
-                labelText: "Alış Fiyatı ($currency)", // para birimi göster
+                labelText: movementType == "out"
+                    ? "Satış Fiyatı ($currency)"
+                    : "Alış Fiyatı ($currency)",
               ),
               keyboardType: TextInputType.number,
             ),
+
             TextField(
               controller: _noteCtrl,
               decoration: const InputDecoration(labelText: "Not"),

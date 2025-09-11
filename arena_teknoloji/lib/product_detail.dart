@@ -65,7 +65,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
     _saleCtrl = TextEditingController(text: p["sale_price"]?.toString() ?? "0");
     _criticalCtrl = TextEditingController(
-      text: p["critical_stock"]?.toString() ?? "0",
+      text: (p["critical_stock"] != null)
+          ? (p["critical_stock"] is int
+                ? p["critical_stock"].toString()
+                : (double.tryParse(
+                        p["critical_stock"].toString(),
+                      )?.toInt().toString() ??
+                      "0"))
+          : "0",
     );
 
     if (p["colors"] is List) {
