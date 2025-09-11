@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:arena_teknoloji/definitions_page.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -109,6 +110,12 @@ class _HomeShellState extends State<HomeShell> {
                       onTap: () => _go('/critical'),
                     ),
                     ListTile(
+  leading: const Icon(Icons.category),
+  title: const Text("Tanımlar"),
+  onTap: () => _go('/definitions'),
+),
+
+                    ListTile(
                       leading: const Icon(Icons.bar_chart),
                       title: const Text("Raporlama"),
                       onTap: () => _go('/reports'),
@@ -152,6 +159,11 @@ class _HomeShellState extends State<HomeShell> {
                     return MaterialPageRoute(
                       builder: (_) => const CriticalListPage(),
                     );
+                    case '/definitions':
+  return MaterialPageRoute(
+    builder: (_) => const DefinitionsPage(),
+  );
+
                   case '/reports':
                     return MaterialPageRoute(
                       builder: (_) => const ReportsPage(),
@@ -240,97 +252,186 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Ürünler"),
-        automaticallyImplyLeading: false, // geri oku kaldır
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text("Ürünler"),
+      automaticallyImplyLeading: false,
+    ),
+    body: loading
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
+            children: [
+              // 🔹 Arama kutusu
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: "Ürün ara (isim veya barkod)...",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+
+              // 🔹 Tablo görünümü (şık ve sola dayalı)
+              Expanded(
+  child: SingleChildScrollView(
+    scrollDirection: Axis.vertical,
+    child: Container(
+      width: double.infinity, // ekran boyunca yayılsın
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
       ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // 🔹 Arama kutusu
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: "Ürün ara (isim veya barkod)...",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
+      child: DataTableTheme(
+        data: DataTableThemeData(
+          headingRowColor: MaterialStateProperty.all(
+            Colors.blue.shade50,
+          ),
+          headingTextStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+          dividerThickness: 1,
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final tableWidth = constraints.maxWidth;
+            return DataTable(
+              columnSpacing: tableWidth / 12, // genişliğe göre boşluk ayarı
+              showBottomBorder: true,
+             columns: const [
+  DataColumn(label: Text("Ürün Adı", textAlign: TextAlign.left)),
+  DataColumn(label: Text("Stok", textAlign: TextAlign.left)),
+  DataColumn(label: Text("Durum", textAlign: TextAlign.left)),
+  DataColumn(label: Text("Satış Fiyatı", textAlign: TextAlign.left)),
+  DataColumn(label: Text("Maliyet", textAlign: TextAlign.left)),
+],
 
-                // 🔹 Tablo görünümü
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text("Ürün Adı")),
-                        DataColumn(label: Text("Stok")),
-                        DataColumn(label: Text("Satış Fiyatı")),
-                        DataColumn(label: Text("Maliyet")),
-                      ],
-                      rows: filteredProducts.map((p) {
-                        final compats = (p["compatibles"] ?? []) as List;
-                        final compatsText = compats.isEmpty
-                            ? "Uyumlu model yok"
-                            : compats.map((c) => c["name"]).join(", ");
 
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              Tooltip(
-                                message: compatsText, // hover’da görünecek
-                                child: Text(p["name"] ?? ""),
-                              ),
-                              onTap: () async {
-                                final result = await Navigator.of(
-                                  context,
-                                ).pushNamed('/productDetail', arguments: p);
-                                if (result == true) fetchProducts();
-                              },
-                            ),
-                            DataCell(
-                              Text(
-                                numFmt.format(
-                                  double.tryParse(
-                                        p["stock_on_hand"].toString(),
-                                      ) ??
-                                      0,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              Text(
-                                "${numFmt.format(double.tryParse(p["sale_price"].toString()) ?? 0)} $globalCurrency",
-                              ),
-                            ),
-                            DataCell(
-                              Text(
-                                "${numFmt.format(double.tryParse(p["avg_cost"].toString()) ?? 0)} $globalCurrency",
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () async {
-          final result = await Navigator.of(context).pushNamed('/productForm');
+             rows: filteredProducts.map((p) {
+  final stock = double.tryParse(p["stock_on_hand"].toString()) ?? 0;
+
+  return DataRow(
+    cells: [
+      // Ürün Adı
+      DataCell(
+        Tooltip(
+          message: (p["compatibles"] ?? []).isEmpty
+              ? "Uyumlu model yok"
+              : (p["compatibles"] as List).map((c) => c["name"]).join(", "),
+          child: Text(p["name"] ?? ""),
+        ),
+        onTap: () async {
+          final result = await Navigator.of(context).pushNamed(
+            '/productDetail',
+            arguments: p,
+          );
           if (result == true) fetchProducts();
         },
       ),
-    );
-  }
+
+      // Stok (sadece sayı, ortalı)
+      DataCell(
+  Align(
+    alignment: Alignment.centerLeft,
+    child: Text(
+      numFmt.format(stock),
+      textAlign: TextAlign.left,
+    ),
+  ),
+),
+
+
+      // Durum (etiket ayrı sütun)
+      DataCell(
+  Align(
+    alignment: Alignment.centerLeft,
+    child: stock > 0
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              border: Border.all(color: Colors.green, width: 1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              "Stokta Var",
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          )
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              border: Border.all(color: Colors.red, width: 1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              "Stokta Yok",
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+  ),
+),
+
+
+      // Satış Fiyatı
+      DataCell(
+        Text(
+          "${numFmt.format(double.tryParse(p["sale_price"].toString()) ?? 0)} $globalCurrency",
+        ),
+      ),
+
+      // Maliyet
+      DataCell(
+        Text(
+          "${numFmt.format(double.tryParse(p["avg_cost"].toString()) ?? 0)} $globalCurrency",
+        ),
+      ),
+    ],
+  );
+}).toList(),
+
+            );
+          },
+        ),
+      ),
+    ),
+  ),
+),
+
+            ],
+          ),
+    floatingActionButton: FloatingActionButton(
+      child: const Icon(Icons.add),
+      onPressed: () async {
+        final result = await Navigator.of(context).pushNamed('/productForm');
+        if (result == true) fetchProducts();
+      },
+    ),
+  );
+}
+
 }
 
 /// Raporlama Sayfası

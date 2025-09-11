@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:dropdown_search/dropdown_search.dart';
+import 'package:collection/collection.dart';
 
 const String API_BASE =
     "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
-// 14 sabit renk listesi
+// 🔹 14 sabit renk listesi
 const predefinedColors = [
   "Siyah",
   "Beyaz",
@@ -48,14 +50,37 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
   List allProducts = [];
   List searchResults = [];
+  List categories = [];
+  List brands = [];
+  List models = [];
 
+  int? selectedCategoryId;
+  int? selectedBrandId;
+  int? selectedModelId;
   bool loading = false;
 
   @override
   void initState() {
     super.initState();
     _fetchProducts();
+    _fetchDefinitions();
     _compatSearchCtrl.addListener(_onSearchChanged);
+  }
+
+  Future<void> _fetchDefinitions() async {
+    try {
+      final catRes = await http.get(Uri.parse("$API_BASE/categories"));
+      final brandRes = await http.get(Uri.parse("$API_BASE/brands"));
+      final modelRes = await http.get(Uri.parse("$API_BASE/models"));
+
+      if (catRes.statusCode == 200) categories = jsonDecode(catRes.body);
+      if (brandRes.statusCode == 200) brands = jsonDecode(brandRes.body);
+      if (modelRes.statusCode == 200) models = jsonDecode(modelRes.body);
+
+      setState(() {});
+    } catch (e) {
+      debugPrint("Tanımlar alınamadı: $e");
+    }
   }
 
   @override
@@ -92,14 +117,15 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
     setState(() {
       searchResults = allProducts
-          .where(
-            (p) => (p["name"] ?? "").toString().toLowerCase().contains(query),
-          )
+          .where((p) => (p["name"] ?? "")
+              .toString()
+              .toLowerCase()
+              .contains(query))
           .toList();
     });
   }
 
-  // Boşsa otomatik barkod (EAN-13)
+  // 🔹 Boşsa otomatik barkod (EAN-13)
   String _genEAN13() {
     final rnd = Random();
     final digits = [8, 6, 9];
@@ -133,10 +159,14 @@ class _ProductFormPageState extends State<ProductFormPage> {
       "name": _nameCtrl.text.trim(),
       "purchase_price":
           double.tryParse(_purchaseCtrl.text.replaceAll(",", ".")) ?? 0,
-      "sale_price": double.tryParse(_saleCtrl.text.replaceAll(",", ".")) ?? 0,
+      "sale_price":
+          double.tryParse(_saleCtrl.text.replaceAll(",", ".")) ?? 0,
       "critical_stock":
           double.tryParse(_criticalCtrl.text.replaceAll(",", ".")) ?? 0,
       "unit": "adet",
+      "category": selectedCategoryId,
+      "brand": selectedBrandId,
+      "model": selectedModelId,
       if (_skuCtrl.text.trim().isNotEmpty) "sku": _skuCtrl.text.trim(),
       if (_versionCtrl.text.trim().isNotEmpty)
         "version_code": _versionCtrl.text.trim(),
@@ -152,7 +182,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
       if (res.statusCode == 201) {
         final productId = jsonDecode(res.body)["id"];
-        // uyumlu modelleri kaydet
+
+        // 🔹 Uyumlu modelleri kaydet
         if (_selectedCompatibles.isNotEmpty) {
           final ids = _selectedCompatibles
               .map((p) => int.tryParse(p["id"].toString()) ?? 0)
@@ -173,174 +204,270 @@ class _ProductFormPageState extends State<ProductFormPage> {
       }
     } catch (e) {
       debugPrint("❌ Exception: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("İstek başarısız: $e")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("İstek başarısız: $e")));
     } finally {
       setState(() => loading = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Yeni Ürün")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _skuCtrl,
-                decoration: const InputDecoration(labelText: "SKU (opsiyonel)"),
-              ),
-              TextFormField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: "Ürün Adı"),
-                validator: (v) => v == null || v.isEmpty ? "Zorunlu" : null,
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _barcodeCtrl,
-                      decoration: const InputDecoration(
-                        labelText: "Barkod (boşsa otomatik)",
-                      ),
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(title: const Text("Yeni Ürün")),
+    body: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        key: _formKey,
+        child: ListView(
+          children: [
+            TextFormField(
+              controller: _skuCtrl,
+              decoration: const InputDecoration(labelText: "SKU (opsiyonel)"),
+            ),
+
+            // 🔹 Kategori Autocomplete
+         // 🔹 Kategori Autocomplete
+Autocomplete<Map<String, dynamic>>(
+  displayStringForOption: (opt) => opt["name"] ?? "",
+  optionsBuilder: (TextEditingValue text) {
+    if (text.text.isEmpty) {
+      return categories.cast<Map<String, dynamic>>();
+    }
+    return categories
+        .where((c) =>
+            (c["name"] ?? "").toLowerCase().contains(text.text.toLowerCase()))
+        .cast<Map<String, dynamic>>(); // ✅ tip dönüştürme
+  },
+  onSelected: (val) {
+    setState(() {
+      selectedCategoryId = int.tryParse(val["id"].toString());
+    });
+  },
+  fieldViewBuilder: (ctx, controller, node, onComplete) {
+    return TextFormField(
+      controller: controller,
+      focusNode: node,
+      decoration: const InputDecoration(
+        labelText: "Kategori",
+        border: OutlineInputBorder(),
+      ),
+      validator: (_) =>
+          selectedCategoryId == null ? "Kategori seçmek zorunlu" : null,
+    );
+  },
+),
+
+            const SizedBox(height: 12),
+
+            // 🔹 Marka Autocomplete
+            // 🔹 Marka Autocomplete
+Autocomplete<Map<String, dynamic>>(
+  displayStringForOption: (opt) => opt["name"] ?? "",
+  optionsBuilder: (TextEditingValue text) {
+    if (text.text.isEmpty) {
+      return brands.cast<Map<String, dynamic>>();
+    }
+    return brands
+        .where((b) =>
+            (b["name"] ?? "").toLowerCase().contains(text.text.toLowerCase()))
+        .cast<Map<String, dynamic>>();
+  },
+  onSelected: (val) {
+    setState(() {
+      selectedBrandId = int.tryParse(val["id"].toString());
+    });
+  },
+  fieldViewBuilder: (ctx, controller, node, onComplete) {
+    return TextFormField(
+      controller: controller,
+      focusNode: node,
+      decoration: const InputDecoration(
+        labelText: "Marka",
+        border: OutlineInputBorder(),
+      ),
+      validator: (_) =>
+          selectedBrandId == null ? "Marka seçmek zorunlu" : null,
+    );
+  },
+),
+
+            const SizedBox(height: 12),
+
+            // 🔹 Model Autocomplete
+           // 🔹 Model Autocomplete
+Autocomplete<Map<String, dynamic>>(
+  displayStringForOption: (opt) =>
+      "${opt["name"] ?? ""} (${opt["brand_name"] ?? ""})",
+  optionsBuilder: (TextEditingValue text) {
+    if (text.text.isEmpty) {
+      return models.cast<Map<String, dynamic>>();
+    }
+    return models
+        .where((m) =>
+            (m["name"] ?? "").toLowerCase().contains(text.text.toLowerCase()))
+        .cast<Map<String, dynamic>>();
+  },
+  onSelected: (val) {
+    setState(() {
+      selectedModelId = int.tryParse(val["id"].toString());
+    });
+  },
+  fieldViewBuilder: (ctx, controller, node, onComplete) {
+    return TextFormField(
+      controller: controller,
+      focusNode: node,
+      decoration: const InputDecoration(
+        labelText: "Model",
+        border: OutlineInputBorder(),
+      ),
+      validator: (_) =>
+          selectedModelId == null ? "Model seçmek zorunlu" : null,
+    );
+  },
+),
+
+            const SizedBox(height: 16),
+
+            TextFormField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(labelText: "Ürün Adı"),
+              validator: (v) => v == null || v.isEmpty ? "Zorunlu" : null,
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _barcodeCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Barkod (boşsa otomatik)",
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      _barcodeCtrl.text = _genEAN13();
-                      setState(() {});
-                    },
-                    child: const Text("Oluştur"),
-                  ),
-                ],
-              ),
-              TextFormField(
-                controller: _versionCtrl,
-                decoration: const InputDecoration(
-                  labelText: "Versiyon Kodu (opsiyonel)",
                 ),
-              ),
-              TextFormField(
-                controller: _purchaseCtrl,
-                decoration: const InputDecoration(labelText: "Alış Fiyatı"),
-                keyboardType: TextInputType.number,
-              ),
-              TextFormField(
-                controller: _saleCtrl,
-                decoration: const InputDecoration(labelText: "Satış Fiyatı"),
-                keyboardType: TextInputType.number,
-              ),
-              TextFormField(
-                controller: _criticalCtrl,
-                decoration: const InputDecoration(labelText: "Kritik Stok"),
-                keyboardType: TextInputType.number,
-              ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    _barcodeCtrl.text = _genEAN13();
+                    setState(() {});
+                  },
+                  child: const Text("Oluştur"),
+                ),
+              ],
+            ),
+            TextFormField(
+              controller: _versionCtrl,
+              decoration:
+                  const InputDecoration(labelText: "Versiyon Kodu (opsiyonel)"),
+            ),
+            TextFormField(
+              controller: _purchaseCtrl,
+              decoration: const InputDecoration(labelText: "Alış Fiyatı"),
+              keyboardType: TextInputType.number,
+            ),
+            TextFormField(
+              controller: _saleCtrl,
+              decoration: const InputDecoration(labelText: "Satış Fiyatı"),
+              keyboardType: TextInputType.number,
+            ),
+            TextFormField(
+              controller: _criticalCtrl,
+              decoration: const InputDecoration(labelText: "Kritik Stok"),
+              keyboardType: TextInputType.number,
+            ),
 
-              const SizedBox(height: 16),
-              Text("Renkler", style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
+            const SizedBox(height: 16),
+            Text("Renkler", style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: -6,
+              children: predefinedColors.map((color) {
+                final checked = _selectedColors.contains(color);
+                return FilterChip(
+                  label: Text(color),
+                  selected: checked,
+                  onSelected: (val) {
+                    setState(() {
+                      if (val) {
+                        _selectedColors.add(color);
+                      } else {
+                        _selectedColors.remove(color);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 20),
+            Text("Uyumlu Modeller",
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _compatSearchCtrl,
+              decoration: const InputDecoration(
+                labelText: "Ürün ara...",
+                prefixIcon: Icon(Icons.search),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (searchResults.isNotEmpty)
+              ...searchResults.take(5).map((p) {
+                final id = int.tryParse(p["id"].toString()) ?? 0;
+                return ListTile(
+                  title: Text(p["name"] ?? ""),
+                  trailing: IconButton(
+                    icon: Icon(
+                      _selectedCompatibles.any((x) => x["id"] == id)
+                          ? Icons.check_box
+                          : Icons.add_box_outlined,
+                      color: Colors.blue,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        if (_selectedCompatibles.any((x) => x["id"] == id)) {
+                          _selectedCompatibles.removeWhere((x) => x["id"] == id);
+                        } else {
+                          _selectedCompatibles.add(p);
+                        }
+                      });
+                    },
+                  ),
+                );
+              }),
+
+            if (_selectedCompatibles.isNotEmpty) ...[
+              const Divider(),
+              Text("Seçilen Modeller",
+                  style: Theme.of(context).textTheme.titleSmall),
               Wrap(
                 spacing: 6,
-                runSpacing: -6,
-                children: predefinedColors.map((color) {
-                  final checked = _selectedColors.contains(color);
-                  return FilterChip(
-                    label: Text(color),
-                    selected: checked,
-                    onSelected: (val) {
+                children: _selectedCompatibles.map((p) {
+                  return Chip(
+                    label: Text(p["name"] ?? ""),
+                    onDeleted: () {
                       setState(() {
-                        if (val) {
-                          _selectedColors.add(color);
-                        } else {
-                          _selectedColors.remove(color);
-                        }
+                        _selectedCompatibles
+                            .removeWhere((x) => x["id"] == p["id"]);
                       });
                     },
                   );
                 }).toList(),
               ),
-
-              const SizedBox(height: 20),
-              Text(
-                "Uyumlu Modeller",
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _compatSearchCtrl,
-                decoration: const InputDecoration(
-                  labelText: "Ürün ara...",
-                  prefixIcon: Icon(Icons.search),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (searchResults.isNotEmpty)
-                ...searchResults.take(5).map((p) {
-                  final id = int.tryParse(p["id"].toString()) ?? 0;
-                  return ListTile(
-                    title: Text(p["name"] ?? ""),
-                    trailing: IconButton(
-                      icon: Icon(
-                        _selectedCompatibles.any((x) => x["id"] == id)
-                            ? Icons.check_box
-                            : Icons.add_box_outlined,
-                        color: Colors.blue,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          if (_selectedCompatibles.any((x) => x["id"] == id)) {
-                            _selectedCompatibles.removeWhere(
-                              (x) => x["id"] == id,
-                            );
-                          } else {
-                            _selectedCompatibles.add(p);
-                          }
-                        });
-                      },
-                    ),
-                  );
-                }),
-
-              if (_selectedCompatibles.isNotEmpty) ...[
-                const Divider(),
-                Text(
-                  "Seçilen Modeller",
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                Wrap(
-                  spacing: 6,
-                  children: _selectedCompatibles.map((p) {
-                    return Chip(
-                      label: Text(p["name"] ?? ""),
-                      onDeleted: () {
-                        setState(() {
-                          _selectedCompatibles.removeWhere(
-                            (x) => x["id"] == p["id"],
-                          );
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: loading ? null : _save,
-                child: loading
-                    ? const CircularProgressIndicator()
-                    : const Text("Kaydet"),
-              ),
             ],
-          ),
+
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: loading ? null : _save,
+              child: loading
+                  ? const CircularProgressIndicator()
+                  : const Text("Kaydet"),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 }
