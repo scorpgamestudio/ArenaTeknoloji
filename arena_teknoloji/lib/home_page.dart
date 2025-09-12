@@ -7,14 +7,25 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // ✅ const kaldırıldı
-        title: const Text("Ana Sayfa"), // sadece Text const olabilir
+        title: const Text("Ana Sayfa"),
       ),
-      body: const Center(
-        child: Text(
-          "Arena Teknoloji Yönetim Paneli\nHoş Geldiniz 👋",
-          style: TextStyle(fontSize: 18),
-          textAlign: TextAlign.center,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            // ✅ Logo
+            Image(
+              image: AssetImage("assets/images/Splash.png"),
+              width: 320, // ihtiyacına göre boyutunu ayarlayabilirsin
+              height: 320,
+            ),
+            SizedBox(height: 24),
+            Text(
+              "Arena Teknoloji Yönetim Paneli\nHoş Geldiniz 👋",
+              style: TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );

@@ -82,19 +82,42 @@ class _HomeShellState extends State<HomeShell> {
       body: Row(
         children: [
           // ==== Sol Menü ====
-          SizedBox(
-            width: 230,
-            child: Material(
-              elevation: 12,
-              shadowColor: Colors.black54,
-              child: Container(
-                color: Colors.blue.shade50,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 20),
-                    const Center(child: ShineLogo()),
-                    const Divider(),
+       SizedBox(
+  width: 230,
+  child: Material(
+    elevation: 12,
+    shadowColor: Colors.black54,
+    child: Container(
+      color: Colors.blue.shade50,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 20),
+          const Center(child: ShineLogo()),
+          const SizedBox(height: 8),
+
+          // 🔹 Logonun altındaki kurumsal yazı
+          const Center(
+            child: Text(
+              "Akıllı Entegre Stok Yönetim\nTedarikçi Yazılımı V2.1",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color.fromARGB(221, 0, 42, 255),
+                shadows: [
+                  Shadow(
+                    offset: Offset(1, 1),
+                    blurRadius: 3,
+                    color: Color.fromARGB(66, 0, 0, 0),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+const Divider(thickness: 3, color: Color.fromARGB(133, 136, 0, 255)),
+
                     ListTile(
                       leading: const Icon(Icons.home),
                       title: const Text("Ana Sayfa"),
@@ -131,14 +154,27 @@ class _HomeShellState extends State<HomeShell> {
                       onTap: () => _go('/settings'),
                     ),
                     const Spacer(),
-                    const Padding(
-                      padding: EdgeInsets.all(12.0),
-                      child: Text(
-                        "© Arena Teknoloji",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.black54, fontSize: 12),
-                      ),
+
+                    // ✅ En alta logo ekledik
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 1),
+                  child: Center(
+                    child: Image.asset(
+                      "assets/images/Splash.png", // senin eklediğin dosya adı
+                      height: 200,
+                      fit: BoxFit.contain,
                     ),
+                  ),
+                ),
+
+                const Padding(
+                  padding: EdgeInsets.all(15.0),
+                  child: Text(
+                    "© Arena Teknoloji",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.black54, fontSize: 15),
+                  ),
+                ),
                   ],
                 ),
               ),
