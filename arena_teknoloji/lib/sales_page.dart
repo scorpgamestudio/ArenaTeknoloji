@@ -1,3 +1,4 @@
+import 'package:arena_teknoloji/sales_form_page.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -137,8 +138,12 @@ class _SalesPageState extends State<SalesPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // Yeni satış ekleme sayfası açılacak
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SalesFormPage()),
+          );
         },
+
         icon: const Icon(Icons.add),
         label: const Text("Yeni Satış"),
       ),
