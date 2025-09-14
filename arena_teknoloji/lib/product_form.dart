@@ -6,24 +6,6 @@ import 'package:http/http.dart' as http;
 const String API_BASE =
     "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
-// 🔹 14 sabit renk listesi
-const predefinedColors = [
-  "Siyah",
-  "Beyaz",
-  "Mavi",
-  "Gold",
-  "Silver",
-  "Violet",
-  "Mor",
-  "Çöl Rengi",
-  "Kırmızı",
-  "Yeşil",
-  "Turuncu",
-  "Pembe",
-  "Sarı",
-  "Turkuaz",
-];
-
 class ProductFormPage extends StatefulWidget {
   const ProductFormPage({super.key});
 
@@ -37,12 +19,8 @@ class _ProductFormPageState extends State<ProductFormPage> {
   final _skuCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _barcodeCtrl = TextEditingController();
-  final _purchaseCtrl = TextEditingController();
-  final _saleCtrl = TextEditingController();
-  final _criticalCtrl = TextEditingController();
   final _versionCtrl = TextEditingController();
 
-  final Set<String> _selectedColors = {};
   List categories = [];
   List brands = [];
   List models = [];
@@ -79,9 +57,6 @@ class _ProductFormPageState extends State<ProductFormPage> {
     _skuCtrl.dispose();
     _nameCtrl.dispose();
     _barcodeCtrl.dispose();
-    _purchaseCtrl.dispose();
-    _saleCtrl.dispose();
-    _criticalCtrl.dispose();
     _versionCtrl.dispose();
     super.dispose();
   }
@@ -118,19 +93,15 @@ class _ProductFormPageState extends State<ProductFormPage> {
     final body = {
       "barcode": barcode,
       "name": _nameCtrl.text.trim(),
-      "purchase_price":
-          double.tryParse(_purchaseCtrl.text.replaceAll(",", ".")) ?? 0,
-      "sale_price": double.tryParse(_saleCtrl.text.replaceAll(",", ".")) ?? 0,
-      "critical_stock":
-          double.tryParse(_criticalCtrl.text.replaceAll(",", ".")) ?? 0,
       "unit": "adet",
       "category": selectedCategoryId,
       "brand": selectedBrandId,
-      "model": selectedModelId,
+      "model_id": selectedModelId,
+
       if (_skuCtrl.text.trim().isNotEmpty) "sku": _skuCtrl.text.trim(),
       if (_versionCtrl.text.trim().isNotEmpty)
         "version_code": _versionCtrl.text.trim(),
-      if (_selectedColors.isNotEmpty) "colors": _selectedColors.toList(),
+      // ❌ fiyat ve renk yok, varyant backend açacak
     };
 
     try {
@@ -143,6 +114,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       if (res.statusCode == 201) {
         if (mounted) Navigator.pop(context, true);
       } else {
+        debugPrint("❌ Response: ${res.body}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Hata ${res.statusCode}: ${res.body}")),
         );
@@ -157,73 +129,151 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
   }
 
-  // ====== POPUP: Kategori Ekle (üst kategori seçilebilir) ======
+  // ====== POPUP: Kategori Ekle (üst kategori + varyant seçenekleri) ======
   Future<void> _openAddCategoryDialog() async {
     final nameCtrl = TextEditingController();
     int? parentId;
+    final selectedVariants = <String>{};
+
+    // sabit varyant listesi
+    const variantOptions = {
+      "Renk": "Ürün renk seçeneği (siyah, beyaz, mavi vb.)",
+      "Kasalı": "Ürün kasa ile birlikte gelir mi?",
+      "Çıtalı": "Ekran çerçeveli mi?",
+      "Ekran Teknolojisi": "TFT, INCELL, OLED gibi ekran tipleri",
+      "Marka Adı": "Ürünün tedarik markası, boş ise OEM yazılır",
+      "Batarya Tipi": "Standart veya Güçlendirilmiş",
+      "Kapak Türü": "Kamera camlı veya düz kapak",
+      "Durumu": "Sıfır Orjinal, Çıkma Orjinal vb.",
+    };
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Kategori Ekle"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: "Kategori Adı"),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int?>(
-              decoration: const InputDecoration(
-                labelText: "Üst Kategori (opsiyonel)",
-                border: OutlineInputBorder(),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("Kategori Ekle"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Kategori Adı",
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int?>(
+                      decoration: const InputDecoration(
+                        labelText: "Üst Kategori (opsiyonel)",
+                      ),
+                      value: parentId,
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text("Yok"),
+                        ),
+                        ...categories.map(
+                          (c) => DropdownMenuItem<int?>(
+                            value: int.tryParse(c["id"].toString()),
+                            child: Text(c["name"]),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => parentId = val,
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "Varyant Seçenekleri",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: variantOptions.entries.map((entry) {
+                        final opt = entry.key;
+                        final desc = entry.value;
+                        final checked = selectedVariants.contains(opt);
+                        return FilterChip(
+                          label: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                opt,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                desc,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                          selected: checked,
+                          onSelected: (val) {
+                            setStateDialog(() {
+                              if (val) {
+                                selectedVariants.add(opt);
+                              } else {
+                                selectedVariants.remove(opt);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               ),
-              value: parentId,
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text("Yok")),
-                ...categories.map<DropdownMenuItem<int?>>(
-                  (c) => DropdownMenuItem<int?>(
-                    value: int.tryParse(c["id"].toString()),
-                    child: Text(c["name"]),
-                  ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("İptal"),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final name = nameCtrl.text.trim();
+                    if (name.isEmpty) return;
+                    final res = await http.post(
+                      Uri.parse("$API_BASE/categories"),
+                      headers: {"Content-Type": "application/json"},
+                      body: jsonEncode({
+                        "name": name,
+                        if (parentId != null) "parent_id": parentId,
+                        "variant_options": selectedVariants.toList(),
+                      }),
+                    );
+                    if (res.statusCode == 200 || res.statusCode == 201) {
+                      Navigator.pop(ctx, true);
+                    }
+                  },
+                  child: const Text("Kaydet"),
                 ),
               ],
-              onChanged: (v) => parentId = v,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("İptal"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              if (name.isEmpty) return;
-              final res = await http.post(
-                Uri.parse("$API_BASE/categories"),
-                headers: {"Content-Type": "application/json"},
-                body: jsonEncode({
-                  "name": name,
-                  if (parentId != null) "parent_id": parentId,
-                }),
-              );
-              if (res.statusCode == 200 || res.statusCode == 201) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: const Text("Kaydet"),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
 
     if (ok == true) _fetchDefinitions();
   }
 
-  // ====== POPUP: Marka Ekle (bağımsız) ======
+  // ====== POPUP: Marka Ekle ======
   Future<void> _openAddBrandDialog() async {
     final nameCtrl = TextEditingController();
     final ok = await showDialog<bool>(
@@ -261,7 +311,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     if (ok == true) _fetchDefinitions();
   }
 
-  // ====== POPUP: Model Ekle (markaya bağlı + üst model seçilebilir) ======
+  // ====== POPUP: Model Ekle (seçili markayı göstererek) ======
   Future<void> _openAddModelDialog() async {
     if (selectedBrandId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -307,12 +357,6 @@ class _ProductFormPageState extends State<ProductFormPage> {
               );
               if (res.statusCode == 200 || res.statusCode == 201) {
                 Navigator.pop(ctx, true);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text("Model eklenemedi (${res.statusCode})"),
-                  ),
-                );
               }
             },
             child: const Text("Kaydet"),
@@ -321,9 +365,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       ),
     );
 
-    if (ok == true) {
-      await _fetchDefinitions();
-    }
+    if (ok == true) _fetchDefinitions();
   }
 
   @override
@@ -333,6 +375,22 @@ class _ProductFormPageState extends State<ProductFormPage> {
         : models.where(
             (m) => m["brand_id"].toString() == selectedBrandId.toString(),
           );
+
+    // 🔹 Seçilen kategoriye bağlı varyantları çöz
+    final selectedCategory = categories.firstWhere(
+      (c) => c["id"].toString() == selectedCategoryId.toString(),
+      orElse: () => {"variant_options": []},
+    );
+    List<dynamic> categoryVariants = [];
+    if (selectedCategory["variant_options"] != null) {
+      try {
+        categoryVariants = selectedCategory["variant_options"] is String
+            ? jsonDecode(selectedCategory["variant_options"])
+            : (selectedCategory["variant_options"] as List);
+      } catch (e) {
+        debugPrint("Kategori varyant decode hatası: $e");
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text("Yeni Ürün")),
@@ -348,7 +406,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
               ),
               const SizedBox(height: 12),
 
-              // 🔹 Kategori - Marka - Model YAN YANA
+              // 🔹 Kategori - Marka - Model YAN YANA + Ekle butonları
               Row(
                 children: [
                   // Kategori
@@ -491,45 +549,49 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   labelText: "Versiyon Kodu (opsiyonel)",
                 ),
               ),
-              TextFormField(
-                controller: _purchaseCtrl,
-                decoration: const InputDecoration(labelText: "Alış Fiyatı"),
-                keyboardType: TextInputType.number,
-              ),
-              TextFormField(
-                controller: _saleCtrl,
-                decoration: const InputDecoration(labelText: "Satış Fiyatı"),
-                keyboardType: TextInputType.number,
-              ),
-              TextFormField(
-                controller: _criticalCtrl,
-                decoration: const InputDecoration(labelText: "Kritik Stok"),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
 
-              Text("Renkler", style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: -6,
-                children: predefinedColors.map((color) {
-                  final checked = _selectedColors.contains(color);
-                  return FilterChip(
-                    label: Text(color),
-                    selected: checked,
-                    onSelected: (val) {
-                      setState(() {
-                        if (val) {
-                          _selectedColors.add(color);
-                        } else {
-                          _selectedColors.remove(color);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
+              // 🔹 Bilgilendirme kutusu
+              if (categoryVariants.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Bilgilendirme",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Bu ürün için stok hareketi girerken aşağıdaki varyasyonları "
+                        "seçeceksiniz:",
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: categoryVariants
+                            .map<Widget>(
+                              (opt) => Chip(
+                                label: Text(opt.toString()),
+                                backgroundColor: Colors.green.shade100,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 20),
               ElevatedButton(

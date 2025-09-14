@@ -6,6 +6,25 @@ import 'supplier_form.dart';
 const String API_BASE =
     "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
 
+const predefinedColors = [
+  "Siyah",
+  "Beyaz",
+  "Mavi",
+  "Gold",
+  "Silver",
+  "Violet",
+  "Mor",
+  "Çöl Rengi",
+  "Kırmızı",
+  "Yeşil",
+  "Turuncu",
+  "Pembe",
+  "Sarı",
+  "Turkuaz",
+];
+
+const ekranTeknolojileri = ["TFT", "INCELL", "OLED"];
+
 class StockFormPage extends StatefulWidget {
   final Map product;
   const StockFormPage({super.key, required this.product});
@@ -18,6 +37,7 @@ class _StockFormPageState extends State<StockFormPage> {
   final _qtyCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  final _brandNameCtrl = TextEditingController();
 
   String movementType = "in"; // varsayılan giriş
   bool loading = false;
@@ -27,6 +47,14 @@ class _StockFormPageState extends State<StockFormPage> {
   int? selectedSupplierId;
   bool loadingSuppliers = true;
 
+  // Varyantlar
+  List<String> categoryVariants = [];
+
+  // Seçimler
+  Set<String> selectedColors = {};
+  String? selectedEkranTeknolojisi;
+  String? markaAdi;
+
   // Currency
   String currency = "TRY";
 
@@ -35,6 +63,7 @@ class _StockFormPageState extends State<StockFormPage> {
     super.initState();
     fetchSuppliers();
     fetchCurrency();
+    fetchVariants();
   }
 
   Future<void> fetchCurrency() async {
@@ -68,19 +97,70 @@ class _StockFormPageState extends State<StockFormPage> {
     }
   }
 
+  Future<void> fetchVariants() async {
+    try {
+      final catId = widget.product["category"];
+      if (catId == null) return;
+
+      final res = await http.get(Uri.parse("$API_BASE/categories"));
+      if (res.statusCode == 200) {
+        final cats = jsonDecode(res.body);
+        final cat = cats.firstWhere(
+          (c) => c["id"].toString() == catId.toString(),
+          orElse: () => null,
+        );
+
+        if (cat != null && cat["variant_options"] != null) {
+          List<dynamic> opts = [];
+          try {
+            opts = cat["variant_options"] is String
+                ? jsonDecode(cat["variant_options"])
+                : (cat["variant_options"] as List);
+          } catch (e) {
+            debugPrint("Varyant decode hatası: $e");
+          }
+
+          setState(() {
+            categoryVariants = opts.map((e) => e.toString()).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Kategori varyantları alınamadı: $e");
+    }
+  }
+
   Future<void> saveMovement() async {
-    if (_qtyCtrl.text.isEmpty) return;
+    if (_qtyCtrl.text.isEmpty || _priceCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Miktar ve fiyat zorunlu")));
+      return;
+    }
+
+    // Seçilen varyantları paketle
+    final Map<String, dynamic> selectedVariantData = {};
+    if (selectedColors.isNotEmpty) {
+      selectedVariantData["Renk"] = selectedColors.toList();
+    }
+    if (_brandNameCtrl.text.trim().isNotEmpty) {
+      selectedVariantData["Marka Adı"] = _brandNameCtrl.text.trim();
+    }
+    if (selectedEkranTeknolojisi != null) {
+      selectedVariantData["Ekran Teknolojisi"] = selectedEkranTeknolojisi;
+    }
 
     setState(() => loading = true);
 
     final body = {
       "product_id": widget.product["id"],
       "qty": double.tryParse(_qtyCtrl.text) ?? 0,
-      "type": movementType,
       "unit_price": double.tryParse(_priceCtrl.text) ?? 0,
+      "type": movementType,
       "ref": "APP",
       "note": _noteCtrl.text,
       "supplier_id": selectedSupplierId,
+      "variants": selectedVariantData, // JSON objesi olarak yolluyoruz
     };
 
     final res = await http.post(
@@ -115,7 +195,9 @@ class _StockFormPageState extends State<StockFormPage> {
                 )
                 .toList(),
             onChanged: (v) => setState(() => selectedSupplierId = v),
-            decoration: const InputDecoration(labelText: "Tedarikçi"),
+            decoration: const InputDecoration(
+              labelText: "Tedarikçi (opsiyonel)",
+            ),
           );
 
     return Scaffold(
@@ -124,6 +206,7 @@ class _StockFormPageState extends State<StockFormPage> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
+            // Stok giriş/çıkış seçimi
             DropdownButtonFormField<String>(
               value: movementType,
               items: const [
@@ -152,6 +235,7 @@ class _StockFormPageState extends State<StockFormPage> {
                 label: const Text("Tedarikçi Ekle"),
               ),
             ),
+
             TextField(
               controller: _qtyCtrl,
               decoration: const InputDecoration(labelText: "Miktar"),
@@ -166,11 +250,68 @@ class _StockFormPageState extends State<StockFormPage> {
               ),
               keyboardType: TextInputType.number,
             ),
-
             TextField(
               controller: _noteCtrl,
               decoration: const InputDecoration(labelText: "Not"),
             ),
+
+            const SizedBox(height: 16),
+            if (categoryVariants.isNotEmpty) ...[
+              Text(
+                "Varyantlar",
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+
+              if (categoryVariants.contains("Renk")) ...[
+                const SizedBox(height: 10),
+                const Text("Renk Seçin"),
+                Wrap(
+                  spacing: 6,
+                  children: predefinedColors.map((c) {
+                    final selected = selectedColors.contains(c);
+                    return FilterChip(
+                      label: Text(c),
+                      selected: selected,
+                      onSelected: (v) {
+                        setState(() {
+                          if (v) {
+                            selectedColors.add(c);
+                          } else {
+                            selectedColors.remove(c);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+
+              if (categoryVariants.contains("Marka Adı")) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _brandNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: "Marka Adı (serbest)",
+                  ),
+                ),
+              ],
+
+              if (categoryVariants.contains("Ekran Teknolojisi")) ...[
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: selectedEkranTeknolojisi,
+                  items: ekranTeknolojileri
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => selectedEkranTeknolojisi = v),
+                  decoration: const InputDecoration(
+                    labelText: "Ekran Teknolojisi",
+                  ),
+                ),
+              ],
+            ],
+
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: loading ? null : saveMovement,

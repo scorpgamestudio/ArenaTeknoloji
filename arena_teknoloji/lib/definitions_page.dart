@@ -4,6 +4,19 @@ import 'package:http/http.dart' as http;
 
 import 'main.dart'; // API_BASE için
 
+// 🔹 Sabit varyant seçenekleri
+// Varyant seçenekleri ve açıklamaları
+const variantOptions = {
+  "Renk": "Ürün renk seçeneği (siyah, beyaz, mavi vb.)",
+  "Kasalı": "Ürün kasa ile birlikte gelir mi?",
+  "Çıtalı": "Ekran çerçeveli mi?",
+  "Ekran Teknolojisi": "TFT, INCELL, OLED gibi ekran tipleri",
+  "Marka Adı": "Ürünün tedarik markası, boş ise OEM yazılır",
+  "Batarya Tipi": "Standart veya Güçlendirilmiş",
+  "Kapak Türü": "Kamera camlı veya düz kapak",
+  "Durumu": "Sıfır Orjinal, Çıkma Orjinal vb.",
+};
+
 class DefinitionsPage extends StatefulWidget {
   const DefinitionsPage({super.key});
 
@@ -44,55 +57,122 @@ class _DefinitionsPageState extends State<DefinitionsPage>
     setState(() => loading = false);
   }
 
-  // 🔹 Kategori ekle
+  // 🔹 Kategori ekle (Varyant seçimi ile birlikte)
   Future<void> addCategory() async {
     final nameController = TextEditingController();
     int? parentId;
+    final selectedVariants = <String>{};
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text("Kategori Ekle"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: "Kategori Adı"),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int?>(
-                decoration: const InputDecoration(labelText: "Üst Kategori"),
-                value: null,
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text("Yok")),
-                  ...categories.map(
-                    (c) => DropdownMenuItem<int?>(
-                      value: int.tryParse(c["id"].toString()), // ✅ String → int
-                      child: Text(c["name"]),
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("Kategori Ekle"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: "Kategori Adı",
+                      ),
                     ),
-                  ),
-                ],
-                onChanged: (val) => parentId = val,
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int?>(
+                      decoration: const InputDecoration(
+                        labelText: "Üst Kategori",
+                      ),
+                      value: null,
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text("Yok"),
+                        ),
+                        ...categories.map(
+                          (c) => DropdownMenuItem<int?>(
+                            value: int.tryParse(c["id"].toString()),
+                            child: Text(c["name"]),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => parentId = val,
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "Varyant Seçenekleri",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: variantOptions.entries.map((entry) {
+                        final opt = entry.key;
+                        final desc = entry.value;
+                        final checked = selectedVariants.contains(opt);
+                        return FilterChip(
+                          label: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                opt,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                desc,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                          selected: checked,
+                          onSelected: (val) {
+                            setStateDialog(() {
+                              if (val) {
+                                selectedVariants.add(opt);
+                              } else {
+                                selectedVariants.remove(opt);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context), // ✅ sadece kapatır
-              child: const Text("İptal"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context, {
-                  "name": nameController.text.trim(),
-                  "parent_id": parentId,
-                });
-              },
-              child: const Text("Kaydet"),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("İptal"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, {
+                      "name": nameController.text.trim(),
+                      "parent_id": parentId,
+                      "variant_options": selectedVariants.toList(),
+                    });
+                  },
+                  child: const Text("Kaydet"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -122,7 +202,7 @@ class _DefinitionsPageState extends State<DefinitionsPage>
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), // ✅ kapatır
+              onPressed: () => Navigator.pop(context),
               child: const Text("İptal"),
             ),
             ElevatedButton(
@@ -168,7 +248,7 @@ class _DefinitionsPageState extends State<DefinitionsPage>
                 items: brands
                     .map(
                       (b) => DropdownMenuItem<int?>(
-                        value: int.tryParse(b["id"].toString()), // ✅
+                        value: int.tryParse(b["id"].toString()),
                         child: Text(b["name"]),
                       ),
                     )
@@ -179,7 +259,7 @@ class _DefinitionsPageState extends State<DefinitionsPage>
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), // ✅ kapatır
+              onPressed: () => Navigator.pop(context),
               child: const Text("İptal"),
             ),
             ElevatedButton(
@@ -218,7 +298,7 @@ class _DefinitionsPageState extends State<DefinitionsPage>
         title: const Text("Silme Onayı"),
         content: Text(
           "“$name” kaydını silmek üzeresiniz.\n\n"
-          "Bu $type kaydına bağlı alt kayıtlar (alt kategoriler, ürünler vb.) olabilir.\n"
+          "Bu $type kaydına bağlı alt kayıtlar olabilir.\n"
           "Silmek istediğinize emin misiniz?",
         ),
         actions: [
@@ -235,7 +315,7 @@ class _DefinitionsPageState extends State<DefinitionsPage>
       ),
     );
 
-    if (confirm != true) return; // Vazgeçti
+    if (confirm != true) return;
 
     try {
       final url = Uri.parse("$API_BASE/$type/$id");
@@ -270,25 +350,41 @@ class _DefinitionsPageState extends State<DefinitionsPage>
                   itemCount: categories.length,
                   itemBuilder: (context, i) {
                     final c = categories[i];
-                    final parent = categories.firstWhere(
-                      (p) =>
-                          p["id"].toString() ==
-                          (c["parent_id"] ?? '').toString(),
-                      orElse: () => null,
-                    );
+
+                    // 🔹 Backend'den variant_options gelecek
+                    List<dynamic> variantOptions = [];
+                    if (c["variant_options"] != null) {
+                      try {
+                        variantOptions = c["variant_options"] is String
+                            ? jsonDecode(c["variant_options"])
+                            : (c["variant_options"] as List);
+                      } catch (e) {
+                        debugPrint("Varyant decode hatası: $e");
+                      }
+                    }
 
                     return ListTile(
-                      title: Text(c["name"]),
-                      subtitle: parent != null
-                          ? Text("Üst: ${parent["name"]}")
-                          : null,
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                          final id = int.tryParse(c["id"].toString());
-                          if (id != null)
-                            deleteItem("categories", id, c["name"]);
-                        },
+                      title: Text(c["name"] ?? ""),
+                      subtitle: variantOptions.isNotEmpty
+                          ? Text("Varyantlar: ${variantOptions.join(', ')}")
+                          : const Text("Varyant yok"),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => editCategory(c), // ✅ düzenleme
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () {
+                              final id = int.tryParse(c["id"].toString());
+                              if (id != null) {
+                                deleteItem("categories", id, c["name"]);
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -368,6 +464,106 @@ class _DefinitionsPageState extends State<DefinitionsPage>
     );
   }
 
+  Future<void> editCategory(Map c) async {
+    final nameController = TextEditingController(text: c["name"]);
+    Set<String> selectedVariants = {};
+
+    if (c["variant_options"] != null) {
+      selectedVariants = Set<String>.from(c["variant_options"]);
+    }
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text("Kategori Düzenle"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: "Kategori Adı",
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: variantOptions.entries.map((entry) {
+                      final opt = entry.key;
+                      final desc = entry.value;
+                      final checked = selectedVariants.contains(opt);
+                      return FilterChip(
+                        label: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              opt,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              desc,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                        selected: checked,
+                        onSelected: (val) {
+                          setStateDialog(() {
+                            if (val) {
+                              selectedVariants.add(opt);
+                            } else {
+                              selectedVariants.remove(opt);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("İptal"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, {
+                      "name": nameController.text.trim(),
+                      "variant_options": selectedVariants
+                          .toList(), // ✅ doğru key
+                    });
+                  },
+                  child: const Text("Kaydet"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && result["name"].isNotEmpty) {
+      final id = c["id"];
+      await http.put(
+        Uri.parse("$API_BASE/categories/$id"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(result),
+      );
+      fetchAll();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -376,17 +572,12 @@ class _DefinitionsPageState extends State<DefinitionsPage>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
-            color: const Color.fromARGB(
-              255,
-              239,
-              255,
-              231,
-            ), // 👈 TabBar zemini buradan kontrol ediliyor
+            color: const Color.fromARGB(255, 239, 255, 231),
             child: TabBar(
               controller: _tabController,
-              labelColor: Colors.blue, // aktif sekme yazısı
-              unselectedLabelColor: Colors.black54, // pasif sekme yazısı
-              indicatorColor: Colors.blue, // alt çizgi
+              labelColor: Colors.blue,
+              unselectedLabelColor: Colors.black54,
+              indicatorColor: Colors.blue,
               tabs: const [
                 Tab(text: "Kategoriler"),
                 Tab(text: "Markalar"),

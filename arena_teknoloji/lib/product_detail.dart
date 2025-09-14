@@ -3,30 +3,12 @@ import 'package:arena_teknoloji/stock_form.dart';
 import 'package:arena_teknoloji/stock_list.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 
-// 🔹 globalCurrency değişkeni main.dart içinde tanımlı
+// 🔹 globalCurrency main.dart içinde tanımlı
 import 'main.dart';
 
 const String API_BASE =
     "https://arenateknoloji.com/MagazaOtomasyon/api/index.php";
-
-const predefinedColors = [
-  "Siyah",
-  "Beyaz",
-  "Mavi",
-  "Gold",
-  "Silver",
-  "Violet",
-  "Mor",
-  "Çöl Rengi",
-  "Kırmızı",
-  "Yeşil",
-  "Turuncu",
-  "Pembe",
-  "Sarı",
-  "Turkuaz",
-];
 
 class ProductDetailPage extends StatefulWidget {
   final Map product;
@@ -40,18 +22,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   late TextEditingController _skuCtrl;
   late TextEditingController _nameCtrl;
   late TextEditingController _barcodeCtrl;
-  late TextEditingController _purchaseCtrl;
-  late TextEditingController _saleCtrl;
-  late TextEditingController _criticalCtrl;
   final _compatSearchCtrl = TextEditingController();
 
-  final numFmt = NumberFormat("#,##0.##", "tr_TR");
   bool loading = false;
-
-  Set<String> selectedColors = {};
   List allProducts = [];
   List searchResults = [];
   List compatibles = [];
+  List variants = [];
 
   @override
   void initState() {
@@ -60,26 +37,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     _skuCtrl = TextEditingController(text: p["sku"]);
     _nameCtrl = TextEditingController(text: p["name"]);
     _barcodeCtrl = TextEditingController(text: p["barcode"] ?? "");
-    _purchaseCtrl = TextEditingController(
-      text: p["purchase_price"]?.toString() ?? "0",
-    );
-    _saleCtrl = TextEditingController(text: p["sale_price"]?.toString() ?? "0");
-    _criticalCtrl = TextEditingController(
-      text: (p["critical_stock"] != null)
-          ? (p["critical_stock"] is int
-                ? p["critical_stock"].toString()
-                : (double.tryParse(
-                        p["critical_stock"].toString(),
-                      )?.toInt().toString() ??
-                      "0"))
-          : "0",
-    );
 
-    if (p["colors"] is List) {
-      selectedColors = Set<String>.from(p["colors"]);
-    }
     _fetchCompatibles();
     _fetchAllProducts();
+    _fetchVariants();
 
     _compatSearchCtrl.addListener(_onSearchChanged);
   }
@@ -89,9 +50,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     _skuCtrl.dispose();
     _nameCtrl.dispose();
     _barcodeCtrl.dispose();
-    _purchaseCtrl.dispose();
-    _saleCtrl.dispose();
-    _criticalCtrl.dispose();
     _compatSearchCtrl.dispose();
     super.dispose();
   }
@@ -101,13 +59,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final res = await http.get(
         Uri.parse("$API_BASE/products/${widget.product["id"]}/compatibles"),
       );
-
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is List) {
-          setState(() {
-            compatibles = data;
-          });
+          setState(() => compatibles = data);
         }
       }
     } catch (e) {
@@ -119,12 +74,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     try {
       final res = await http.get(Uri.parse("$API_BASE/products"));
       if (res.statusCode == 200) {
-        setState(() {
-          allProducts = jsonDecode(res.body);
-        });
+        setState(() => allProducts = jsonDecode(res.body));
       }
     } catch (e) {
       debugPrint("Tüm ürünler alınamadı: $e");
+    }
+  }
+
+  Future<void> _fetchVariants() async {
+    try {
+      final res = await http.get(
+        Uri.parse("$API_BASE/products/${widget.product["id"]}/stock"),
+      );
+      if (res.statusCode == 200) {
+        setState(() {
+          variants = jsonDecode(res.body);
+        });
+      } else {
+        debugPrint("Varyant stokları alınamadı: ${res.body}");
+      }
+    } catch (e) {
+      debugPrint("Varyant stokları alınamadı: $e");
     }
   }
 
@@ -147,25 +117,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> updateProduct() async {
     setState(() => loading = true);
-
     final body = {
       "sku": _skuCtrl.text,
       "barcode": _barcodeCtrl.text,
       "name": _nameCtrl.text,
-      "purchase_price": double.tryParse(_purchaseCtrl.text) ?? 0,
-      "sale_price": double.tryParse(_saleCtrl.text) ?? 0,
-      "critical_stock": double.tryParse(_criticalCtrl.text) ?? 0,
       "unit": "adet",
       "is_active": 1,
-      "colors": selectedColors.toList(),
     };
-
     final res = await http.put(
       Uri.parse("$API_BASE/products/${widget.product["id"]}"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(body),
     );
-
     if (res.statusCode == 200) {
       final ids = compatibles.map((c) => c["id"]).toList();
       await http.post(
@@ -173,7 +136,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"compatibles": ids}),
       );
-
       if (context.mounted) Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -198,6 +160,122 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
   }
 
+  Widget _actionButtons(BuildContext context) {
+    return Row(
+      children: [
+        _actionButton(
+          icon: Icons.update,
+          color: Colors.blue,
+          label: "Güncelle",
+          onTap: updateProduct,
+        ),
+        _actionButton(
+          icon: Icons.delete,
+          color: Colors.red,
+          label: "Sil",
+          onTap: deleteProduct,
+        ),
+        _actionButton(
+          icon: Icons.list,
+          color: Colors.orange,
+          label: "Stoklar",
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StockListPage(product: widget.product),
+              ),
+            );
+          },
+        ),
+        _actionButton(
+          icon: Icons.add,
+          color: Colors.green,
+          label: "Stok Ekle",
+          onTap: () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StockFormPage(product: widget.product),
+              ),
+            );
+            if (result == true && context.mounted) {
+              Navigator.pop(context, true);
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color, // ✅ arka plan direkt renk
+            foregroundColor: Colors.white, // ✅ yazılar her zaman beyaz
+            minimumSize: const Size(0, 45), // ✅ yükseklik kontrolü
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+            elevation: 2,
+          ),
+          onPressed: onTap,
+          icon: Icon(icon, size: 18),
+          label: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14, // ✅ font büyüklüğü
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _variantsTable() {
+    if (variants.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text("Bu ürün için stok hareketi bulunmuyor."),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: const [
+          DataColumn(label: Text("Varyantlar")),
+          DataColumn(label: Text("Stok")),
+          DataColumn(label: Text("Para Birimi")),
+        ],
+        rows: variants.map((v) {
+          final varMap = v["variants"] ?? {};
+          final varText = varMap.entries
+              .map((e) => "${e.key}: ${e.value}")
+              .join(", ");
+
+          return DataRow(
+            cells: [
+              DataCell(Text(varText)),
+              DataCell(Text(v["stock"].toString())),
+              DataCell(Text(v["currency"].toString())),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -218,49 +296,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               controller: _barcodeCtrl,
               decoration: const InputDecoration(labelText: "Barkod"),
             ),
-            TextField(
-              controller: _purchaseCtrl,
-              decoration: InputDecoration(
-                labelText: "Alış Fiyatı ($globalCurrency)",
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: _saleCtrl,
-              decoration: InputDecoration(
-                labelText: "Satış Fiyatı ($globalCurrency)",
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: _criticalCtrl,
-              decoration: const InputDecoration(labelText: "Kritik Stok"),
-              keyboardType: TextInputType.number,
-            ),
-
             const SizedBox(height: 16),
-            Text("Renkler", style: Theme.of(context).textTheme.titleMedium),
-            Wrap(
-              spacing: 6,
-              children: predefinedColors.map((c) {
-                final selected = selectedColors.contains(c);
-                return FilterChip(
-                  label: Text(c),
-                  selected: selected,
-                  onSelected: (v) {
-                    setState(() {
-                      if (v) {
-                        selectedColors.add(c);
-                      } else {
-                        selectedColors.remove(c);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
-            ),
 
-            const SizedBox(height: 16),
+            // 🔹 Uyumlu modeller
             Text(
               "Uyumlu Modeller",
               style: Theme.of(context).textTheme.titleMedium,
@@ -295,7 +333,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                 );
               }),
-
             if (compatibles.isNotEmpty) ...[
               const Divider(),
               Text(
@@ -318,46 +355,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
             ],
 
+            const SizedBox(height: 16),
+            _actionButtons(context),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: loading ? null : updateProduct,
-              child: loading
-                  ? const CircularProgressIndicator()
-                  : const Text("Güncelle"),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: loading ? null : deleteProduct,
-              child: const Text("Sil"),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => StockListPage(product: widget.product),
-                  ),
-                );
-              },
-              child: const Text("Stok Hareketlerini Gör"),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => StockFormPage(product: widget.product),
-                  ),
-                );
-                if (result == true && context.mounted) {
-                  Navigator.pop(context, true);
-                }
-              },
-              child: const Text("Stok Hareketi Ekle"),
-            ),
+            Text("Stok Durumu", style: Theme.of(context).textTheme.titleMedium),
+            _variantsTable(),
           ],
         ),
       ),
