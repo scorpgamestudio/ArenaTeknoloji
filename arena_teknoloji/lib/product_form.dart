@@ -21,6 +21,13 @@ class _ProductFormPageState extends State<ProductFormPage> {
   final _barcodeCtrl = TextEditingController();
   final _versionCtrl = TextEditingController();
 
+
+  final _compatSearchCtrl = TextEditingController();
+List allProducts = [];
+List searchResults = [];
+List compatibles = [];
+
+
   List categories = [];
   List brands = [];
   List models = [];
@@ -30,11 +37,14 @@ class _ProductFormPageState extends State<ProductFormPage> {
   int? selectedModelId;
   bool loading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchDefinitions();
-  }
+ @override
+void initState() {
+  super.initState();
+  _fetchDefinitions();
+  _fetchAllProducts();
+  _compatSearchCtrl.addListener(_onSearchChanged);
+}
+
 
   Future<void> _fetchDefinitions() async {
     try {
@@ -52,14 +62,16 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
   }
 
-  @override
-  void dispose() {
-    _skuCtrl.dispose();
-    _nameCtrl.dispose();
-    _barcodeCtrl.dispose();
-    _versionCtrl.dispose();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _skuCtrl.dispose();
+  _nameCtrl.dispose();
+  _barcodeCtrl.dispose();
+  _versionCtrl.dispose();
+  _compatSearchCtrl.dispose();
+  super.dispose();
+}
+
 
   // 🔹 Boşsa otomatik barkod (EAN-13)
   String _genEAN13() {
@@ -82,52 +94,92 @@ class _ProductFormPageState extends State<ProductFormPage> {
     return digits.join();
   }
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => loading = true);
+ Future<void> _save() async {
+  if (!_formKey.currentState!.validate()) return;
+  setState(() => loading = true);
 
-    final barcode = _barcodeCtrl.text.trim().isEmpty
-        ? _genEAN13()
-        : _barcodeCtrl.text.trim();
+  final barcode = _barcodeCtrl.text.trim().isEmpty
+      ? _genEAN13()
+      : _barcodeCtrl.text.trim();
 
-    final body = {
-      "barcode": barcode,
-      "name": _nameCtrl.text.trim(),
-      "unit": "adet",
-      "category": selectedCategoryId,
-      "brand": selectedBrandId,
-      "model_id": selectedModelId,
+  final body = {
+    "barcode": barcode,
+    "name": _nameCtrl.text.trim(),
+    "unit": "adet",
+    "category": selectedCategoryId,
+    "brand": selectedBrandId,
+    "model_id": selectedModelId,
+    if (_skuCtrl.text.trim().isNotEmpty) "sku": _skuCtrl.text.trim(),
+    if (_versionCtrl.text.trim().isNotEmpty)
+      "version_code": _versionCtrl.text.trim(),
+  };
 
-      if (_skuCtrl.text.trim().isNotEmpty) "sku": _skuCtrl.text.trim(),
-      if (_versionCtrl.text.trim().isNotEmpty)
-        "version_code": _versionCtrl.text.trim(),
-      // ❌ fiyat ve renk yok, varyant backend açacak
-    };
+  try {
+    final res = await http.post(
+      Uri.parse("$API_BASE/products"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(body),
+    );
 
-    try {
-      final res = await http.post(
-        Uri.parse("$API_BASE/products"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
+    if (res.statusCode == 201) {
+      final created = jsonDecode(res.body);
+      final productId = created["product_id"];
 
-      if (res.statusCode == 201) {
-        if (mounted) Navigator.pop(context, true);
-      } else {
-        debugPrint("❌ Response: ${res.body}");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Hata ${res.statusCode}: ${res.body}")),
+      // ✅ Uyumlu modelleri kaydet
+      if (compatibles.isNotEmpty && productId != null) {
+        final ids = compatibles.map((c) => c["id"]).toList();
+        await http.post(
+          Uri.parse("$API_BASE/products/$productId/compatibles"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"compatibles": ids}),
         );
       }
-    } catch (e) {
-      debugPrint("❌ Exception: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("İstek başarısız: $e")));
-    } finally {
-      setState(() => loading = false);
+
+      if (mounted) Navigator.pop(context, true);
+    } else {
+      debugPrint("❌ Response: ${res.body}");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Hata ${res.statusCode}: ${res.body}")),
+      );
     }
+  } catch (e) {
+    debugPrint("❌ Exception: $e");
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text("İstek başarısız: $e")));
+  } finally {
+    setState(() => loading = false);
   }
+}
+
+
+
+  Future<void> _fetchAllProducts() async {
+  try {
+    final res = await http.get(Uri.parse("$API_BASE/products"));
+    if (res.statusCode == 200) {
+      setState(() => allProducts = jsonDecode(res.body));
+    }
+  } catch (e) {
+    debugPrint("Tüm ürünler alınamadı: $e");
+  }
+}
+
+void _onSearchChanged() {
+  final q = _compatSearchCtrl.text.toLowerCase();
+  if (q.isEmpty) {
+    setState(() => searchResults = []);
+    return;
+  }
+  setState(() {
+    searchResults = allProducts
+        .where(
+          (p) => (p["name"] ?? "").toString().toLowerCase().contains(q),
+        )
+        .toList();
+  });
+}
+
 
   // ====== POPUP: Kategori Ekle (üst kategori + varyant seçenekleri) ======
   Future<void> _openAddCategoryDialog() async {
@@ -239,6 +291,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   ],
                 ),
               ),
+              
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
@@ -550,48 +603,113 @@ class _ProductFormPageState extends State<ProductFormPage> {
                 ),
               ),
 
-              // 🔹 Bilgilendirme kutusu
-              if (categoryVariants.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Bilgilendirme",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Bu ürün için stok hareketi girerken aşağıdaki varyasyonları "
-                        "seçeceksiniz:",
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: categoryVariants
-                            .map<Widget>(
-                              (opt) => Chip(
-                                label: Text(opt.toString()),
-                                backgroundColor: Colors.green.shade100,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                  ),
+              // 🔹 Bilgilendirme kutusu (kategoriye bağlı varyantlar)
+if (categoryVariants.isNotEmpty) ...[
+  const SizedBox(height: 20),
+  Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.blue.shade200),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Bilgilendirme",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "Bu ürün için stok hareketi girerken aşağıdaki varyasyonları "
+          "seçeceksiniz:",
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: categoryVariants
+              .map<Widget>(
+                (opt) => Chip(
+                  label: Text(opt.toString()),
+                  backgroundColor: Colors.green.shade100,
                 ),
-              ],
+              )
+              .toList(),
+        ),
+      ],
+    ),
+  ),
+],
+
+const SizedBox(height: 20),
+Text(
+  "Uyumlu Modeller",
+  style: Theme.of(context).textTheme.titleMedium,
+),
+TextField(
+  controller: _compatSearchCtrl,
+  decoration: const InputDecoration(
+    labelText: "Ürün ara...",
+    prefixIcon: Icon(Icons.search),
+  ),
+),
+const SizedBox(height: 8),
+if (searchResults.isNotEmpty)
+  SizedBox(
+    height: 200, // maks yükseklik, kaydırmalı olacak
+    child: ListView.builder(
+      itemCount: searchResults.length,
+      itemBuilder: (ctx, i) {
+        final p = searchResults[i];
+        final exists = compatibles.any((x) => x["id"] == p["id"]);
+        return ListTile(
+  title: Text(p["name"] ?? ""),
+  trailing: Icon(
+    exists ? Icons.check_box : Icons.add_box_outlined,
+    color: Colors.blue,
+  ),
+  onTap: () {
+    setState(() {
+      if (exists) {
+        compatibles.removeWhere((x) => x["id"] == p["id"]);
+      } else {
+        compatibles.add(p);
+      }
+    });
+  },
+);
+
+
+      },
+    ),
+  ),
+
+if (compatibles.isNotEmpty) ...[
+  const Divider(),
+  Text(
+    "Seçilen Uyumlu Modeller",
+    style: Theme.of(context).textTheme.titleSmall,
+  ),
+  Wrap(
+    spacing: 6,
+    children: compatibles.map((p) {
+      return Chip(
+        label: Text(p["name"] ?? ""),
+        backgroundColor: Colors.orange.shade100,
+        onDeleted: () {
+          setState(() {
+            compatibles.removeWhere((x) => x["id"] == p["id"]);
+          });
+        },
+      );
+    }).toList(),
+  ),
+],
 
               const SizedBox(height: 20),
               ElevatedButton(
